@@ -158,7 +158,7 @@ cp .env.example .env
 
 docker compose up -d db redis     # PostgreSQL :55432 · Redis :56379
 make install                      # Python 3.12 venv + pinned deps
-make migrate                      # Alembic → 23 tables
+make migrate                      # Alembic → 22 tables
 make seed                         # demo society, slots and accounts
 
 make api                          # API      → http://localhost:8080  (docs: /docs)
@@ -227,7 +227,7 @@ parkvanta/
 │   │   ├── api/v1/routers/      # auth · tenancy · invitations · qr · parking · gate · analytics
 │   │   ├── core/                # settings · security · deps · errors · rate limit
 │   │   ├── database/            # engine · sessions · declarative base
-│   │   ├── models/              # 23-table domain model
+│   │   ├── models/              # 22-table domain model
 │   │   ├── schemas/             # request/response contracts
 │   │   ├── services/            # auth · qr · parking · invitations · gate · analytics
 │   │   ├── workers/             # expiry / overstay sweep

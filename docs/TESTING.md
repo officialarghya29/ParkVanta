@@ -7,7 +7,7 @@
 | Backend | `cd backend && ../.venv/bin/pytest -q` | **17 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
-| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 23 tables |
+| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 22 tables |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
 unique indexes are exercised with production semantics.

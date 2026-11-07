@@ -11,7 +11,7 @@ Invitations → QR Passes → Entry/Exit Events
 Audit Logs · Notifications · Society Policies · Refresh Tokens · Password Reset Tokens
 ```
 
-23 tables are created by the initial migration (`139d935f5774`).
+22 tables are created by the initial migration (`139d935f5774`).
 
 ## 2. Key tables
 

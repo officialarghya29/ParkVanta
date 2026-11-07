@@ -1,0 +1,70 @@
+name: parkvanta
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-parkvanta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-parkvanta}
+      POSTGRES_DB: ${POSTGRES_DB:-parkvanta}
+    ports:
+      - "55432:5432"
+    volumes:
+      - parkvanta_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-parkvanta} -d ${POSTGRES_DB:-parkvanta}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "56379:6379"
+    volumes:
+      - parkvanta_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-parkvanta}:${POSTGRES_PASSWORD:-parkvanta}@db:5432/${POSTGRES_DB:-parkvanta}
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-jwt-secret-change-before-deploying}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    ports:
+      - "8080:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080/api/v1
+    volumes:
+      - ./apps/web:/app
+      - parkvanta_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - api
+
+volumes:
+  parkvanta_pgdata:
+  parkvanta_redisdata:
+  parkvanta_node_modules:

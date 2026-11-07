@@ -1,0 +1,116 @@
+# ParkVanta — API Specification
+
+Base path `/api/v1`. OpenAPI is served at `/api/v1/openapi.json`, interactive docs at `/docs`.
+
+Authentication: `Authorization: Bearer <access_token>`. The refresh token is set as an httpOnly cookie
+(`parkvanta_refresh`, path `/api/v1/auth`) and is also returned once at login for non-browser clients.
+
+## Error envelope
+
+```json
+{ "error": { "code": "no_slot_available", "message": "No compatible parking slot is currently available.", "details": null } }
+```
+
+## Authentication
+
+| Method | Path | Auth | Notes |
+| :--- | :--- | :--- | :--- |
+| POST | `/auth/register` | public | Resident self-registration; account starts unverified |
+| POST | `/auth/login` | public | Rate limited; returns access + refresh tokens |
+| POST | `/auth/refresh` | cookie/body | Rotates the refresh token; replay revokes the family |
+| POST | `/auth/logout` | any | Revokes the presented refresh token |
+| GET | `/auth/me` | bearer | Current identity |
+| POST | `/auth/users` | admin | Provision staff/resident accounts |
+| POST | `/auth/forgot-password` | public | Generic 202 response |
+| POST | `/auth/reset-password` | public | Consumes a reset token, revokes sessions |
+
+## Society, property and inventory
+
+| Method | Path | Roles |
+| :--- | :--- | :--- |
+| POST/GET | `/organizations` | super admin (create), all (scoped read) |
+| POST/GET | `/properties` | admin, manager |
+| GET | `/properties/{id}` | scoped |
+| POST/GET | `/properties/{id}/towers` | admin, manager |
+| POST | `/apartments` | admin, manager |
+| GET | `/properties/{id}/apartments` | scoped |
+| POST/GET | `/properties/{id}/residents` | admin, manager |
+| GET/PATCH | `/residents/me`, `/residents/{user_id}` | resident / admin |
+| POST/GET | `/properties/{id}/guards` | admin, manager |
+| POST/GET | `/parking/zones` | admin / scoped |
+| POST/GET | `/parking/slots` | admin / scoped |
+| PATCH | `/parking/slots/{slot_id}` | admin, manager |
+| GET/PATCH | `/properties/{id}/policy` | scoped / admin |
+
+## Visitors and invitations
+
+| Method | Path | Roles |
+| :--- | :--- | :--- |
+| POST | `/invitations` | resident (verified) |
+| GET | `/invitations?status=&search=&limit=&offset=` | scoped (residents see their own) |
+| GET | `/invitations/{id}` | owner or staff |
+| POST | `/invitations/{id}/approve` | owner or staff — returns the raw pass token once |
+| POST | `/invitations/{id}/reject` | owner or staff |
+| POST | `/invitations/{id}/cancel` | owner or staff |
+
+## QR passes
+
+| Method | Path | Roles |
+| :--- | :--- | :--- |
+| POST | `/qr/verify` | guard/admin — returns an explicit verdict |
+| GET | `/qr/pass/{token}` | public — visitor-safe projection, no PII |
+| GET | `/qr/{pass_id}/status` | staff |
+| POST | `/qr/revoke` | owner/admin |
+
+## Parking
+
+| Method | Path | Roles |
+| :--- | :--- | :--- |
+| GET | `/parking/availability?property_id=` | scoped |
+| POST | `/parking/allocate` | staff — idempotent per invitation |
+| GET | `/parking/reservations` | staff |
+| GET | `/parking/occupancies` | staff |
+| POST | `/parking/occupancies/{id}/release` | staff |
+| GET | `/parking/slots/available` | staff |
+
+## Gate
+
+| Method | Path | Behaviour |
+| :--- | :--- | :--- |
+| POST | `/gate/entry/authorize` | Verifies + consumes the pass atomically; 409 on duplicate |
+| POST | `/gate/entry/confirm` | Creates occupancy, slot → `OCCUPIED` |
+| POST | `/gate/exit/confirm` | Releases occupancy and slot; 409 if already exited |
+| POST | `/gate/manual-override` | Reason ≥ 10 chars, audited |
+| GET | `/gate/active-visitors` | Vehicles currently inside |
+| GET | `/gate/recent-activity` | Last gate decisions |
+
+## Analytics
+
+| Method | Path | Output |
+| :--- | :--- | :--- |
+| GET | `/analytics/overview` | capacity, occupancy, utilisation, today's counts |
+| GET | `/analytics/parking-utilization` | per zone category |
+| GET | `/analytics/visitor-trends?days=` | invitations, entries, exits per day |
+| GET | `/analytics/overstays` | active occupancies past departure |
+| GET | `/notifications` | current user's in-app notifications |
+
+## Verification example
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"resident@skyline.dev","password":"ParkVanta@2026"}' | jq -r .access_token)
+
+curl -s -X POST http://localhost:8080/api/v1/invitations \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"visitor_name":"Rahul Sharma","vehicle_registration":"KA01AB1234",
+       "visitor_type":"GUEST","expected_arrival":"2026-11-08T18:30:00Z",
+       "expected_departure":"2026-11-08T21:30:00Z"}'
+```
+
+## Idempotency notes
+
+- `POST /parking/allocate` returns the existing active reservation instead of double-allocating.
+- `POST /gate/entry/confirm` returns the existing occupancy with `already_confirmed: true`.
+- `POST /gate/exit/confirm` is deliberately **not** idempotent: a second call returns `409 already_exited`
+  so repeated barrier operations stay visible.

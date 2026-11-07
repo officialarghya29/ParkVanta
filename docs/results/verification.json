@@ -1,7 +1,7 @@
 {
   "recorded_at": "2026-11-08",
-  "source": "pytest -q, vitest run, playwright test, FastAPI OpenAPI introspection",
-  "backend_tests": 28,
+  "source": "pytest -q, vitest run, playwright test, ruff, pip-audit, bandit, npm audit, FastAPI OpenAPI introspection",
+  "backend_tests": 30,
   "frontend_tests": 5,
   "e2e_tests": 1,
   "openapi_paths": 53,
@@ -11,10 +11,18 @@
   "concurrency_proofs": 2,
   "failed_tests": 0,
   "build": {
-    "js_kb": 885.14,
-    "js_gzip_kb": 264.8,
-    "css_kb": 35.09,
-    "css_gzip_kb": 6.84
+    "js_kb": 893.12,
+    "js_gzip_kb": 268.43,
+    "css_kb": 34.27,
+    "css_gzip_kb": 6.62
   },
-  "benchmark_file": "docs/benchmarks/local-20c.json"
+  "audits": {
+    "python_vulnerabilities": 0,
+    "node_production_vulnerabilities": 0,
+    "node_development_vulnerabilities": 0,
+    "ruff_errors": 0,
+    "bandit_high_severity": 0
+  },
+  "benchmark_file": "docs/benchmarks/local-20c.json",
+  "write_benchmark_file": "docs/benchmarks/write-local.json"
 }

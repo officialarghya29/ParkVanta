@@ -20,7 +20,6 @@ from app.models import (
 from app.models.enums import Role, SlotStatus
 from app.schemas.common import Page
 from app.schemas.parking import (
-    AllocationRequest,
     AvailabilityOut,
     ManualAllocationRequest,
     OccupancyOut,

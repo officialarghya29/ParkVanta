@@ -56,7 +56,9 @@ def _duplicate(action) -> dict:
     }
 
 
-def _apply(db: Session, guard: User, action, ip_address: str | None) -> dict:
+def _apply(
+    db: Session, guard: User, action, ip_address: str | None, property_id: UUID
+) -> dict:
     if action.action == "ENTRY_CONFIRM":
         if action.invitation_id is None:
             raise ValidationError("invitation_id is required for an offline entry confirmation")
@@ -92,7 +94,7 @@ def _apply(db: Session, guard: User, action, ip_address: str | None) -> dict:
                 guard=guard,
                 invitation_id=action.invitation_id,
                 slot_code=action.slot_code,
-                property_id=None,
+                property_id=property_id,
                 ip_address=ip_address,
             )
         except ConflictError as exc:
@@ -171,7 +173,7 @@ def reconcile(
             continue
 
         try:
-            outcome = _apply(db, guard, action, ip_address)
+            outcome = _apply(db, guard, action, ip_address, property_id)
         except AppError as exc:
             db.rollback()
             results.append(

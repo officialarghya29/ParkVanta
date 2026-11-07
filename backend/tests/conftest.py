@@ -26,10 +26,10 @@ def _ensure_test_database() -> None:
 
 _ensure_test_database()
 
+import app.models  # noqa: E402,F401
 from app.core.security import hash_password  # noqa: E402
 from app.database.base import Base  # noqa: E402
 from app.database.session import SessionLocal, engine  # noqa: E402
-import app.models  # noqa: E402,F401
 from app.main import app as fastapi_app  # noqa: E402
 from app.models import (  # noqa: E402
     Apartment,

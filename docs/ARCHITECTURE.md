@@ -85,7 +85,8 @@ COMMIT
 ```
 
 Entry confirmation is a separate step: it converts the reservation into an occupancy and flips the slot to
-`OCCUPIED`. Authorization is therefore never mistaken for physical presence.
+`OCCUPIED`. It requires an existing `AUTHORIZED` event, so a direct confirm call cannot bypass the pass.
+Authorization is therefore never mistaken for physical presence.
 
 ### 3.3 Exit
 

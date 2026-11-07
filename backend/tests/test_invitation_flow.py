@@ -1,7 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from app.models import AuditLog, EntryExitEvent, Invitation, ParkingOccupancy, ParkingSlot
-from app.models.enums import InvitationStatus, PassStatus
+from app.models import AuditLog, EntryExitEvent, ParkingOccupancy, ParkingSlot
 
 PLATE = "KA01AB1234"
 
@@ -138,6 +137,29 @@ def test_complete_visitor_parking_lifecycle(client, world, tokens, db_session):
         "gate.exit_confirmed",
     }.issubset(actions)
     assert db_session.query(EntryExitEvent).count() >= 3
+
+
+def test_entry_confirmation_requires_online_authorization(client, world, tokens):
+    invitation = create_invitation(client, tokens["resident"])
+    approval = client.post(
+        f"/api/v1/invitations/{invitation['id']}/approve", headers=auth(tokens["resident"])
+    )
+    assert approval.status_code == 200, approval.text
+
+    confirmation = client.post(
+        "/api/v1/gate/entry/confirm",
+        headers=auth(tokens["guard"]),
+        json={"invitation_id": invitation["id"]},
+    )
+    assert confirmation.status_code == 409
+    assert confirmation.json()["error"]["code"] == "authorization_required"
+
+    availability = client.get(
+        f"/api/v1/parking/availability?property_id={world['property_id']}",
+        headers=auth(tokens["guard"]),
+    ).json()
+    assert availability["reserved"] == 1
+    assert availability["occupied"] == 0
 
 
 def test_vehicle_mismatch_is_reported(client, world, tokens):

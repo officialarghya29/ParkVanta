@@ -78,7 +78,7 @@ Authentication: `Authorization: Bearer <access_token>`. The refresh token is set
 | Method | Path | Behaviour |
 | :--- | :--- | :--- |
 | POST | `/gate/entry/authorize` | Verifies + consumes the pass atomically; 409 on duplicate |
-| POST | `/gate/entry/confirm` | Creates occupancy, slot → `OCCUPIED` |
+| POST | `/gate/entry/confirm` | Requires a prior online `AUTHORIZED` event; creates occupancy, slot → `OCCUPIED` |
 | POST | `/gate/exit/confirm` | Releases occupancy and slot; 409 if already exited |
 | POST | `/gate/manual-override` | Reason ≥ 10 chars, audited |
 | POST | `/gate/offline/reconcile` | Idempotent batch of queued exits/overrides/authorized entry confirmations |

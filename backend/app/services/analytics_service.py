@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -12,12 +12,10 @@ from app.models import (
     ParkingReservation,
     ParkingSlot,
     ParkingZone,
-    ParkingZone as Zone,
-    User,
     Vehicle,
     Visitor,
 )
-from app.models.enums import EventDecision, EventDirection, InvitationStatus, OccupancyStatus, SlotStatus
+from app.models.enums import EventDecision, EventDirection, OccupancyStatus, SlotStatus
 
 
 def _start_of_today() -> datetime:

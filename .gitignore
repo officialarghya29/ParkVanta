@@ -46,6 +46,7 @@ postgres-data/
 redis-data/
 uploads/
 tmp/
+backups/
 
 # ─── Editors & OS ────────────────────────────────────────────────────────
 .vscode/

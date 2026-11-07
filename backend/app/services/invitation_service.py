@@ -9,17 +9,17 @@ from app.core.errors import ConflictError, ForbiddenError, NotFoundError, Valida
 from app.core.security import generate_pass_token
 from app.core.time import ensure_utc, utcnow
 from app.models import (
+    Apartment,
     Invitation,
     ParkingReservation,
     ParkingSlot,
     ParkingZone,
+    Property,
     QRPass,
     ResidentProfile,
     User,
     Vehicle,
     Visitor,
-    Apartment,
-    Property,
 )
 from app.models.enums import (
     InvitationStatus,

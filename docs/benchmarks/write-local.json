@@ -1,0 +1,191 @@
+{
+  "generated_at": "2026-11-07T20:32:21.369344+00:00",
+  "target": "http://127.0.0.1:8093/api/v1",
+  "environment": {
+    "host": "ravan",
+    "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
+    "cpu": "AMD Ryzen 7 8840HS w/ Radeon 780M Graphics",
+    "cpu_count": 16,
+    "python": "3.12.3",
+    "postgres": "16 (Docker, local port 55432)",
+    "redis": "7 (Docker, local port 56379)"
+  },
+  "scenario": {
+    "fixture_slots": 106,
+    "gate_cycles": 100,
+    "gate_workers": 16,
+    "contention_rounds": 3,
+    "contention_attempts_per_round": 30,
+    "contention_free_slots": 6,
+    "property_id": "48b3a74e-b31d-4d2e-a41e-074236641bf3",
+    "setup_seconds": 9.649,
+    "elapsed_seconds": 18.338
+  },
+  "phases": {
+    "allocation_contention": {
+      "rounds": [
+        {
+          "round": 1,
+          "attempts": 30,
+          "allocated": 6,
+          "no_slot_available": 24,
+          "unexpected": 0,
+          "latency_ms": {
+            "count": 30,
+            "mean_ms": 276.2,
+            "p50_ms": 281.17,
+            "p95_ms": 320.08,
+            "p99_ms": 326.85,
+            "max_ms": 326.85
+          },
+          "allocated_latency_ms": {
+            "count": 6,
+            "mean_ms": 278.49,
+            "p50_ms": 304.19,
+            "p95_ms": 326.85,
+            "p99_ms": 326.85,
+            "max_ms": 326.85
+          },
+          "conflict_latency_ms": {
+            "count": 24,
+            "mean_ms": 275.63,
+            "p50_ms": 268.66,
+            "p95_ms": 319.0,
+            "p99_ms": 320.08,
+            "max_ms": 320.08
+          }
+        },
+        {
+          "round": 2,
+          "attempts": 30,
+          "allocated": 6,
+          "no_slot_available": 24,
+          "unexpected": 0,
+          "latency_ms": {
+            "count": 30,
+            "mean_ms": 272.07,
+            "p50_ms": 285.93,
+            "p95_ms": 315.49,
+            "p99_ms": 317.78,
+            "max_ms": 317.78
+          },
+          "allocated_latency_ms": {
+            "count": 6,
+            "mean_ms": 251.86,
+            "p50_ms": 238.26,
+            "p95_ms": 287.92,
+            "p99_ms": 287.92,
+            "max_ms": 287.92
+          },
+          "conflict_latency_ms": {
+            "count": 24,
+            "mean_ms": 277.12,
+            "p50_ms": 286.59,
+            "p95_ms": 315.49,
+            "p99_ms": 317.78,
+            "max_ms": 317.78
+          }
+        },
+        {
+          "round": 3,
+          "attempts": 30,
+          "allocated": 6,
+          "no_slot_available": 24,
+          "unexpected": 0,
+          "latency_ms": {
+            "count": 30,
+            "mean_ms": 254.86,
+            "p50_ms": 274.06,
+            "p95_ms": 308.45,
+            "p99_ms": 311.05,
+            "max_ms": 311.05
+          },
+          "allocated_latency_ms": {
+            "count": 6,
+            "mean_ms": 200.98,
+            "p50_ms": 193.38,
+            "p95_ms": 257.46,
+            "p99_ms": 257.46,
+            "max_ms": 257.46
+          },
+          "conflict_latency_ms": {
+            "count": 24,
+            "mean_ms": 268.33,
+            "p50_ms": 280.58,
+            "p95_ms": 308.45,
+            "p99_ms": 311.05,
+            "max_ms": 311.05
+          }
+        }
+      ],
+      "attempts": 90,
+      "allocated": 18,
+      "no_slot_available": 72,
+      "unexpected": 0,
+      "expected_allocations": 18,
+      "free_slots_per_round": 6
+    },
+    "gate_cycle": {
+      "workers": 16,
+      "cycles_completed": 100,
+      "cycles_expected": 100,
+      "requests": 300,
+      "errors": 0,
+      "error_samples": [],
+      "wall_seconds": 3.56,
+      "cycles_per_second": 28.09,
+      "cycle_latency_ms": {
+        "count": 100,
+        "mean_ms": 552.58,
+        "p50_ms": 544.88,
+        "p95_ms": 729.2,
+        "p99_ms": 745.45,
+        "max_ms": 765.54
+      },
+      "per_step": {
+        "authorize": {
+          "count": 100,
+          "mean_ms": 190.61,
+          "p50_ms": 171.47,
+          "p95_ms": 348.14,
+          "p99_ms": 382.13,
+          "max_ms": 383.31
+        },
+        "confirm": {
+          "count": 100,
+          "mean_ms": 184.45,
+          "p50_ms": 185.01,
+          "p95_ms": 221.72,
+          "p99_ms": 257.83,
+          "max_ms": 260.11
+        },
+        "exit": {
+          "count": 100,
+          "mean_ms": 177.51,
+          "p50_ms": 179.23,
+          "p95_ms": 231.95,
+          "p99_ms": 245.59,
+          "max_ms": 254.52
+        }
+      },
+      "status_counts": {
+        "authorize:200": 100,
+        "confirm:200": 100,
+        "exit:200": 100
+      }
+    }
+  },
+  "invariants": {
+    "active_reservations": 0,
+    "active_occupancies": 0,
+    "duplicate_active_reservations": 0,
+    "duplicate_active_occupancies": 0,
+    "completed_invitations": 100,
+    "offline_ledger_rows": 0,
+    "event_decisions": {
+      "CONFIRMED": 100,
+      "AUTHORIZED": 100,
+      "RELEASED": 100
+    }
+  }
+}

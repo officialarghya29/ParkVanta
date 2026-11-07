@@ -4,11 +4,14 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **28 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **30 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
-| Load benchmark | `make load-test` | **3,912 requests · 195.06 req/s · 0 errors** |
+| Read benchmark | `make load-test` | **3,912 requests · 195.06 req/s · 0 errors** |
+| Write benchmark | `make load-test-write` | **100 cycles · 18/18 allocations · 0 errors** |
+| Lint | `make lint` | **Ruff clean** |
+| Dependency audits | `make audit` | **0 Python · 0 Node advisories** |
 | Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 23 tables |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
@@ -28,6 +31,35 @@ seconds at 20-way concurrency. The raw JSON is [`benchmarks/local-20c.json`](ben
 
 Environment: AMD Ryzen 7 8840HS, 16 threads, Linux x86_64, Python 3.12.3, PostgreSQL 16 and Redis 7 in Docker.
 This is a read-path baseline on one host, not a capacity guarantee.
+
+## 1.2 Recorded write run
+
+`make load-test-write` uses a fresh `parkvanta_bench_write` database. It creates 106 visitor bays, blocks the 17
+seed bays, approves 106 visits, frees six bays for a three-round contention test, then runs 100 full gate cycles
+with 16 workers. Raw JSON: [`benchmarks/write-local.json`](benchmarks/write-local.json).
+
+| Metric | Recorded |
+| :--- | ---: |
+| Gate cycles / requests / errors | 100 / 300 / 0 |
+| Gate throughput | 28.09 cycles/s |
+| Cycle p50 / p95 / p99 | 544.88 / 729.20 / 745.45 ms |
+| Authorize / confirm / exit p95 | 348.14 / 221.72 / 231.95 ms |
+| Contention attempts | 90 (3 × 30) |
+| Allocations / expected | 18 / 18 |
+| `no_slot_available` / unexpected | 72 / 0 |
+| Duplicate active reservations / occupancies | 0 / 0 |
+| Active reservations / occupancies afterwards | 0 / 0 |
+
+The run also asserts 100 `AUTHORIZED`, 100 `CONFIRMED` and 100 `RELEASED` events. The fixture is synthetic and
+single-host; it proves the locking and lifecycle paths, not a specific society's capacity.
+
+## 1.3 Static and dependency gates
+
+- `make lint` → Ruff passes over the backend.
+- `make audit` → `pip-audit` and `npm audit --omit=dev --audit-level=high` pass with zero advisories.
+- Full `npm audit` is also clean after the Playwright 1.65 and Vitest 5 upgrades.
+- Bandit high-severity scan is clean.
+- CI runs all of the above in the `security` job; failures block the workflow.
 
 ## 2. What the backend suite proves
 
@@ -49,6 +81,8 @@ This is a read-path baseline on one host, not a capacity guarantee.
 - A resident cannot approve another resident's invitation.
 - Residents only list their own invitations; guards see the property's invitations.
 - Manual override rejects short reasons and records an audit event.
+- Entry confirmation is rejected with `authorization_required` until an online authorization event exists, so an
+  occupancy cannot be created by calling confirm directly.
 
 **Concurrency** (`test_concurrency.py`)
 - Two threads authorize the same pass simultaneously: outcomes are exactly `authorized` + `already_used`;
@@ -75,6 +109,7 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 - An offline entry confirmation after an online authorization succeeds.
 - A device timestamp one hour in the future is rejected with `clock_mismatch`.
 - A cross-tenant reconciliation request returns 403.
+- A society-wide admin with no assigned property can reconcile an exit using the request's explicit property id.
 
 ## 2.1 Browser E2E
 
@@ -118,8 +153,6 @@ The production build type-checks the entire client (`tsc --noEmit`).
 
 | Area | Status |
 | :--- | :--- |
-| Mixed write-path load | Read-path benchmark exists; contended allocation storms are not measured |
-| Dependency CVE gate | Planned (`pip-audit`, `npm audit --omit=dev`) |
 | Vision accuracy suite | Blocked on Stage 13 |
 | Long-disconnect replay (>500 frames) | Bounded Stream retention; older frames are reconciled by REST refetch |
 

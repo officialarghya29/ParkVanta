@@ -89,17 +89,24 @@ spike (capacity or policy problem), and gate authorization errors.
 `.github/workflows/ci.yml` runs on every push/PR:
 
 ```text
-pip install → alembic upgrade (service Postgres) → pytest
-npm ci → npm run build
+backend:  alembic upgrade (service Postgres) → pytest
+frontend: npm ci → tsc + vite build
+e2e:      pip + npm ci → playwright install chromium → full lifecycle test
+security: ruff → pip-audit → npm audit --omit=dev --audit-level=high
 ```
 
-Deployment is intentionally not automatic yet; wire the image build and environment promotion after a pilot
-environment exists.
+The E2E job installs Chromium and sets `PLAYWRIGHT_CHANNEL=chromium`; the bootstrap script resolves either the
+repository virtualenv or the CI-installed Python/alembic/uvicorn binaries. Deployment is intentionally not
+automatic yet.
 
-## 9. Pilot checklist
+## 9. Pilot
 
-- One property, one gate, 2–4 guards, 10–20 visitor bays.
-- Real resident accounts, verified by the society office.
-- Printed fallback procedure for manual override.
-- Measure: verification time, scan success rate, allocation accuracy, double-allocation incidents (must be zero),
-  overstay handling and guard feedback.
+Use the dedicated [single-property pilot runbook](PILOT_RUNBOOK.md). It covers go/no-go checks, deployment,
+backup and restore, monitoring thresholds, incident procedures and pilot exit criteria.
+
+Quick backup while the compose database is running:
+
+```bash
+make pilot-backup
+# writes ./backups/parkvanta-<UTC timestamp>.dump.gz and prunes files older than 14 days
+```

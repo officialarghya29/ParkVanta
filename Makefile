@@ -1,4 +1,4 @@
-.PHONY: help install dev api migrate seed test test-e2e load-test build web-install
+.PHONY: help install dev api migrate seed test test-e2e load-test load-test-write build web-install lint audit pilot-backup
 
 help:
 	@echo "ParkVanta"
@@ -10,12 +10,16 @@ help:
 	@echo "  make test        Run the backend test suite"
 	@echo "  make test-e2e    Run the Playwright visitor lifecycle test"
 	@echo "  make load-test   Benchmark the read path against a fresh seeded DB"
+	@echo "  make load-test-write  Benchmark gate cycles + contended allocations"
+	@echo "  make lint        Run Ruff over the backend"
+	@echo "  make audit       Audit Python and production Node dependencies"
+	@echo "  make pilot-backup  Dump the compose PostgreSQL database with 14-day retention"
 	@echo "  make up          Start Postgres + Redis via Docker Compose"
 
 install:
 	python3 -m venv .venv
 	.venv/bin/pip install --upgrade pip
-	.venv/bin/pip install -r backend/requirements.txt
+	.venv/bin/pip install -r backend/requirements-dev.txt
 
 migrate:
 	cd backend && ../.venv/bin/alembic upgrade head
@@ -43,6 +47,19 @@ test-e2e:
 
 load-test:
 	bash scripts/benchmark.sh
+
+load-test-write:
+	bash scripts/benchmark_write.sh
+
+lint:
+	.venv/bin/ruff check backend
+
+audit:
+	.venv/bin/pip-audit --progress-spinner off
+	cd apps/web && npm audit --omit=dev --audit-level=high
+
+pilot-backup:
+	bash scripts/pilot_backup.sh
 
 build:
 	cd apps/web && npm run build

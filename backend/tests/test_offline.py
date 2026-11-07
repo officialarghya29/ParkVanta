@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from app.models import AuditLog, OfflineGateAction
+from app.models import AuditLog, OfflineGateAction, User
 
 PLATE = "KA07OF7788"
 
@@ -163,6 +163,31 @@ def test_offline_entry_confirmation_accepts_an_authorized_pass(client, world, to
                 }
             ],
         ),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["applied"] == 1
+    assert response.json()["results"][0]["result"]["slot_code"] == "V-01"
+
+
+def test_offline_exit_respects_explicit_property_for_society_admin(
+    client, world, tokens, db_session
+):
+    invitation = _entered_visit(client, tokens)
+
+    # A society-wide admin is not assigned to one property; the reconcile
+    # request is the only source of the target property.
+    admin = db_session.query(User).filter(User.email == world["admin_email"]).one()
+    admin.property_id = None
+    db_session.commit()
+    admin_token = client.post(
+        "/api/v1/auth/login",
+        json={"email": world["admin_email"], "password": "TestPass123"},
+    ).json()["access_token"]
+
+    response = client.post(
+        "/api/v1/gate/offline/reconcile",
+        headers=auth(admin_token),
+        json=_payload(world["property_id"], [_exit_action(invitation["id"])]),
     )
     assert response.status_code == 200, response.text
     assert response.json()["applied"] == 1

@@ -7,7 +7,6 @@ from app.core.errors import AppError, ConflictError, ForbiddenError, NotFoundErr
 from app.core.time import utcnow
 from app.models import (
     EntryExitEvent,
-    GuardProfile,
     Invitation,
     ParkingOccupancy,
     ParkingReservation,
@@ -22,7 +21,6 @@ from app.models.enums import (
     InvitationStatus,
     OccupancyStatus,
     Role,
-    SlotStatus,
 )
 from app.services import audit_service, event_service, notification_service, parking_service, qr_service
 
@@ -174,6 +172,22 @@ def confirm_entry(
 
     if invitation.status == InvitationStatus.COMPLETED.value:
         raise ConflictError("This visit is already complete", code="already_exited")
+
+    # Physical entry is only a confirmation of an authorization that already
+    # happened online. Without this check a caller could create an occupancy
+    # directly, bypassing the single-use pass entirely.
+    authorized = db.scalar(
+        select(EntryExitEvent.id).where(
+            EntryExitEvent.invitation_id == invitation.id,
+            EntryExitEvent.direction == EventDirection.ENTRY.value,
+            EntryExitEvent.decision == EventDecision.AUTHORIZED.value,
+        )
+    )
+    if authorized is None:
+        raise ConflictError(
+            "Entry has not been authorized online. Verify the pass first.",
+            code="authorization_required",
+        )
 
     occupancy: ParkingOccupancy | None = None
     slot: ParkingSlot | None = None
@@ -329,6 +343,7 @@ def manual_override(
         Role.SECURITY_GUARD.value,
         Role.SOCIETY_ADMIN.value,
         Role.PROPERTY_MANAGER.value,
+        Role.SUPER_ADMIN.value,
     }:
         raise ForbiddenError("Only gate staff can record a manual override")
 

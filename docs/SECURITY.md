@@ -91,6 +91,14 @@ metadata, and are written in the same transaction as the operation.
 - Events are advisory. A missing stream cannot block, authorize or release anything; REST refetch is the
   recovery path.
 
+## 6.3 Entry confirmation and authorization
+
+- `POST /gate/entry/confirm` requires an existing `ENTRY/AUTHORIZED` event for the invitation. A caller cannot
+  create an occupancy directly and bypass the single-use pass.
+- Offline entry confirmation applies the same check before calling the normal gate service.
+- Society-wide offline exits use the explicit `property_id` from the reconcile request; an account with no
+  assigned property is not forced through an invalid assertion.
+
 ## 7. Application hardening
 
 - Pydantic validation on every request; SQLAlchemy parameterisation (no string SQL with user input).
@@ -101,6 +109,8 @@ metadata, and are written in the same transaction as the operation.
   development JWT secret.
 - Rate limiting on login and refresh, backed by Redis when present.
 - File uploads are not part of the current surface.
+- CI blocks on Ruff, `pip-audit`, `npm audit --omit=dev --audit-level=high`; Bandit high-severity is clean.
+  The Python and Node audit results are both zero advisories at the recorded commit.
 
 ## 8. Privacy (DPDP-aligned design)
 
@@ -115,5 +125,4 @@ metadata, and are written in the same transaction as the operation.
 - Access tokens are stored in `localStorage` for SPA convenience; a strict CSP and short TTL mitigate, but
   in-memory-only storage is the next hardening step.
 - Rate limiting falls back to per-process state if Redis is unavailable.
-- No automated dependency CVE gate in CI yet (planned: `pip-audit`, `npm audit --production`).
 - Email/SMS delivery is not configured; reset tokens are logged only in non-production environments.

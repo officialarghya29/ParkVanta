@@ -7,12 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import CurrentUser, assert_org_access, assert_property_access, client_ip, require_roles
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
-from app.core.time import utcnow
 from app.database.session import get_db
 from app.models import (
     Apartment,
     GuardProfile,
-    Invitation,
     Organization,
     ParkingSlot,
     ParkingZone,
@@ -21,7 +19,7 @@ from app.models import (
     Tower,
     User,
 )
-from app.models.enums import Role, SlotStatus, ZoneCategory
+from app.models.enums import Role, SlotStatus
 from app.schemas.auth import ResidentUpdateRequest, StaffCreateRequest, UserOut
 from app.schemas.common import Page
 from app.schemas.tenancy import (

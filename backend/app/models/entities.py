@@ -12,7 +12,6 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    Uuid,
     func,
     text,
 )
@@ -21,7 +20,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import (
     EventDecision,
-    EventDirection,
     InvitationStatus,
     NotificationChannel,
     NotificationStatus,

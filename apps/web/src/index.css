@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-abyss: #060b14;
+  --color-abyss-soft: #0a1220;
+  --color-navy: #101b2d;
+  --color-navy-line: #1b2a41;
+  --color-teal: #16a394;
+  --color-teal-bright: #2ee6c8;
+  --color-mist: #f5f7fa;
+  --color-ink: #172033;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-abyss);
+  color: #dbe4f0;
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(circle at 12% -10%, rgba(22, 163, 148, 0.18), transparent 42%),
+    radial-gradient(circle at 88% 0%, rgba(37, 99, 235, 0.12), transparent 40%),
+    linear-gradient(180deg, #060b14 0%, #070f1c 55%, #060b14 100%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(46, 230, 200, 0.25);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-teal-bright);
+  outline-offset: 2px;
+}
+
+.glass {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.hairline {
+  background-image: linear-gradient(90deg, transparent, rgba(46, 230, 200, 0.4), transparent);
+  height: 1px;
+}
+
+.scan-frame {
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(46, 230, 200, 0.16) 50%, transparent 100%);
+  animation: scan 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

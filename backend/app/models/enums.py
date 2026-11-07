@@ -1,0 +1,103 @@
+from enum import StrEnum
+
+
+class Role(StrEnum):
+    SUPER_ADMIN = "SUPER_ADMIN"
+    SOCIETY_ADMIN = "SOCIETY_ADMIN"
+    PROPERTY_MANAGER = "PROPERTY_MANAGER"
+    SECURITY_GUARD = "SECURITY_GUARD"
+    RESIDENT = "RESIDENT"
+
+
+class VisitorType(StrEnum):
+    GUEST = "GUEST"
+    DELIVERY = "DELIVERY"
+    CAB = "CAB"
+    MAINTENANCE = "MAINTENANCE"
+    SERVICE_TECHNICIAN = "SERVICE_TECHNICIAN"
+    BUSINESS = "BUSINESS"
+    EMERGENCY = "EMERGENCY"
+
+
+class InvitationStatus(StrEnum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+    COMPLETED = "COMPLETED"
+
+
+class PassStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    CONSUMED = "CONSUMED"
+    REVOKED = "REVOKED"
+    EXPIRED = "EXPIRED"
+
+
+class ZoneCategory(StrEnum):
+    VISITOR = "VISITOR"
+    RESIDENT = "RESIDENT"
+    RESERVED = "RESERVED"
+    TEMPORARY = "TEMPORARY"
+    SERVICE = "SERVICE"
+    EMERGENCY = "EMERGENCY"
+    ACCESSIBLE = "ACCESSIBLE"
+
+
+class SlotStatus(StrEnum):
+    AVAILABLE = "AVAILABLE"
+    RESERVED = "RESERVED"
+    OCCUPIED = "OCCUPIED"
+    BLOCKED = "BLOCKED"
+    MAINTENANCE = "MAINTENANCE"
+
+
+class VehicleCategory(StrEnum):
+    TWO_WHEELER = "TWO_WHEELER"
+    FOUR_WHEELER = "FOUR_WHEELER"
+    EV = "EV"
+    OVERSIZED = "OVERSIZED"
+
+
+SLOT_ANY_VEHICLE = "ANY"
+
+
+class ReservationStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    CONSUMED = "CONSUMED"
+    RELEASED = "RELEASED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class OccupancyStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    RELEASED = "RELEASED"
+
+
+class EventDirection(StrEnum):
+    ENTRY = "ENTRY"
+    EXIT = "EXIT"
+
+
+class EventDecision(StrEnum):
+    AUTHORIZED = "AUTHORIZED"
+    DENIED = "DENIED"
+    MANUAL_OVERRIDE = "MANUAL_OVERRIDE"
+    CONFIRMED = "CONFIRMED"
+    RELEASED = "RELEASED"
+
+
+class NotificationChannel(StrEnum):
+    IN_APP = "IN_APP"
+    EMAIL = "EMAIL"
+    SMS = "SMS"
+    WHATSAPP = "WHATSAPP"
+
+
+class NotificationStatus(StrEnum):
+    PENDING = "PENDING"
+    SENT = "SENT"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"

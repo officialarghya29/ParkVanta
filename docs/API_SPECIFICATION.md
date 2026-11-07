@@ -84,6 +84,23 @@ Authentication: `Authorization: Bearer <access_token>`. The refresh token is set
 | GET | `/gate/active-visitors` | Vehicles currently inside |
 | GET | `/gate/recent-activity` | Last gate decisions |
 
+## Realtime (Server-Sent Events)
+
+`EventSource` cannot attach an `Authorization` header, so clients exchange their bearer token for a
+short-lived, property-scoped stream ticket. Events are advisory: clients refetch REST state on receipt and on
+reconnect; the database remains authoritative.
+
+| Method | Path | Roles | Notes |
+| :--- | :--- | :--- | :--- |
+| POST | `/events/ticket` | any scoped user | Body `{ "property_id": "<uuid>" }`; returns `{ ticket, expires_in }` (2 minutes) |
+| GET | `/events/stream?ticket=` | ticket holder | `text/event-stream`; `: connected` first, then named `event:` frames |
+
+Event types: `invitation.created`, `invitation.approved`, `invitation.rejected`, `invitation.cancelled`,
+`gate.entry_authorized`, `gate.entry_confirmed`, `gate.exit_confirmed`, `gate.manual_override`,
+`gate.entry_denied`, `parking.updated`, `parking.overstay`. Frames carry `id`, `type`, `property_id`,
+`occurred_at` and a small `data` object (ids and slot codes, never visitor PII). Distribution uses Redis
+pub/sub channel `pv:events:<property_id>` with an in-process fallback when Redis is unavailable.
+
 ## Analytics
 
 | Method | Path | Output |

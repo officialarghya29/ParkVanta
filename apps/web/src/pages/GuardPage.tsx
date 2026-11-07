@@ -25,6 +25,8 @@ import {
   Stat,
   statusTone,
 } from "../components/ui";
+import { useAuth } from "../auth/AuthContext";
+import { useEventStream } from "../hooks/useEventStream";
 import { api } from "../lib/api";
 import { extractPassToken, formatDateTime, formatTime, titleCase } from "../lib/format";
 import type {
@@ -38,6 +40,7 @@ import type {
 const scannerId = "parkvanta-qr-scanner";
 
 export function GuardPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [token, setToken] = useState("");
   const [plate, setPlate] = useState("");
@@ -50,15 +53,19 @@ export function GuardPage() {
   const [overrideDirection, setOverrideDirection] = useState("ENTRY");
   const scannerRef = useRef<{ stop: () => Promise<void> } | null>(null);
 
+  const live = useEventStream(user?.property_id, () => {
+    void queryClient.invalidateQueries({ queryKey: ["gate"] });
+  });
+
   const active = useQuery({
     queryKey: ["gate", "active"],
     queryFn: () => api<ActiveVisitor[]>("/gate/active-visitors"),
-    refetchInterval: 15_000,
+    refetchInterval: live ? 60_000 : 15_000,
   });
   const recent = useQuery({
     queryKey: ["gate", "recent"],
     queryFn: () => api<GateEvent[]>("/gate/recent-activity?limit=8"),
-    refetchInterval: 15_000,
+    refetchInterval: live ? 60_000 : 15_000,
   });
 
   useEffect(() => {
@@ -179,10 +186,16 @@ export function GuardPage() {
             Scanning verifies the pass. Entry is only granted after an explicit authorization.
           </p>
         </div>
-        <Badge tone={active.data?.some((visitor) => visitor.overstay) ? "amber" : "teal"}>
-          <span className="h-1.5 w-1.5 rounded-full bg-current" />
-          {active.data?.length ?? 0} vehicles inside
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge tone={live ? "teal" : "slate"}>
+            <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-teal-bright" : "bg-slate-500"}`} />
+            {live ? "Live" : "Polling"}
+          </Badge>
+          <Badge tone={active.data?.some((visitor) => visitor.overstay) ? "amber" : "teal"}>
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {active.data?.length ?? 0} vehicles inside
+          </Badge>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -202,6 +215,7 @@ export function GuardPage() {
             <div className="flex gap-2">
               <Field label="Pass token or URL">
                 <Input
+                  data-testid="guard-token"
                   value={token}
                   onChange={(event) => setToken(event.target.value)}
                   placeholder="Paste the visitor link or token"
@@ -230,6 +244,7 @@ export function GuardPage() {
             </Field>
 
             <Button
+              data-testid="guard-verify"
               className="w-full"
               onClick={() => {
                 setVerdict(null);
@@ -245,6 +260,7 @@ export function GuardPage() {
 
             {verdict && verdict.reason_code ? (
               <div
+                data-testid="verdict"
                 className={`rounded-2xl border p-5 ${
                   verdict.allowed
                     ? "border-teal/30 bg-teal/[0.07]"
@@ -275,6 +291,7 @@ export function GuardPage() {
                   <div className="mt-4 space-y-2">
                     {!authorization ? (
                       <Button
+                        data-testid="guard-authorize"
                         className="w-full"
                         onClick={() => authorize.mutate()}
                         disabled={authorize.isPending}
@@ -290,6 +307,7 @@ export function GuardPage() {
                         </div>
                         {!entryResult ? (
                           <Button
+                            data-testid="guard-confirm-entry"
                             className="w-full"
                             variant="secondary"
                             onClick={() => confirmEntry.mutate(authorization.invitation_id)}
@@ -342,6 +360,7 @@ export function GuardPage() {
                     </p>
                   </div>
                   <Button
+                    data-testid="guard-exit"
                     variant="secondary"
                     className="px-3 py-1.5 text-xs"
                     onClick={() => confirmExit.mutate(visitor.invitation_id)}

@@ -94,6 +94,25 @@ lock occupancy (ACTIVE)
 
 Repeated exits return `409 already_exited` rather than silently succeeding.
 
+### 3.4 Realtime delivery
+
+```text
+client POST /events/ticket {property_id}
+  → verify bearer + property access
+  → signed JWT ticket (2 min, property-scoped)
+client GET /events/stream?ticket=…
+  → verify signature/scope, subscribe Redis pv:events:<property_id>
+service commits transaction
+  → publish_event(type, property_id, data)   -- never before commit
+  → SSE frame: id, type, occurred_at, data
+client invalidates TanStack Query keys → refetch REST
+```
+
+Events are a latency optimisation, not state. Publishing happens after `db.commit()` in invitation, gate,
+allocation and expiry paths. If Redis or the stream drops, polling intervals (15–20s, relaxed to 60s while
+connected) still converge on PostgreSQL. Stream tickets avoid putting the access token in a URL and expire
+after two minutes.
+
 ## 4. Data ownership and isolation
 
 - Every scoped table carries `organization_id`; parking, invitations and events also carry `property_id`.

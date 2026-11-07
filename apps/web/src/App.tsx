@@ -6,6 +6,7 @@ import { AppShell } from "./components/AppShell";
 import { Button, Card } from "./components/ui";
 import { AdminPage } from "./pages/AdminPage";
 import { GuardPage } from "./pages/GuardPage";
+import { InventoryPage } from "./pages/InventoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PassPage } from "./pages/PassPage";
 import { ResidentPage } from "./pages/ResidentPage";
@@ -78,6 +79,14 @@ export default function App() {
               element={
                 <Protected>
                   <AdminPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/admin/inventory"
+              element={
+                <Protected>
+                  <InventoryPage />
                 </Protected>
               }
             />

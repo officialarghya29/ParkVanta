@@ -227,3 +227,40 @@ export interface Property {
   state: string;
   timezone: string;
 }
+
+export interface Tower {
+  id: string;
+  property_id: string;
+  name: string;
+  floors: number | null;
+}
+
+export interface Apartment {
+  id: string;
+  property_id: string;
+  tower_id: string | null;
+  number: string;
+  floor: number | null;
+}
+
+export interface Zone {
+  id: string;
+  property_id: string;
+  name: string;
+  level: string | null;
+  category: string;
+  priority: number;
+  is_active: boolean;
+}
+
+export interface Policy {
+  id: string;
+  property_id: string;
+  qr_validity_minutes: number;
+  overstay_grace_minutes: number;
+  max_active_visitors: number;
+  allow_manual_override: boolean;
+  require_vehicle_for_entry: boolean;
+  visitor_window_start: string;
+  visitor_window_end: string;
+}

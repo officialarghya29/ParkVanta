@@ -1,4 +1,4 @@
-.PHONY: help install dev api migrate seed test build web-install
+.PHONY: help install dev api migrate seed test test-e2e build web-install
 
 help:
 	@echo "ParkVanta"
@@ -8,6 +8,7 @@ help:
 	@echo "  make api         Run the API at http://localhost:8080"
 	@echo "  make web         Run the web app at http://localhost:5173"
 	@echo "  make test        Run the backend test suite"
+	@echo "  make test-e2e    Run the Playwright visitor lifecycle test"
 	@echo "  make up          Start Postgres + Redis via Docker Compose"
 
 install:
@@ -35,6 +36,9 @@ up:
 
 test:
 	cd backend && ../.venv/bin/pytest -q
+
+test-e2e:
+	cd apps/web && npx playwright test
 
 build:
 	cd apps/web && npm run build

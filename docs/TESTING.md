@@ -4,9 +4,10 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **17 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **21 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
+| Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome) |
 | Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 22 tables |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
@@ -41,6 +42,30 @@ unique indexes are exercised with production semantics.
 
 Both tests use a thread barrier and independent SQLAlchemy sessions against PostgreSQL.
 
+**Realtime** (`test_realtime.py`)
+- Stream ticket minting requires authentication and property access; a cross-tenant request returns 403.
+- An invalid ticket is rejected before the stream opens.
+- The stream returns `text/event-stream` and emits the `: connected` frame.
+- Approving an invitation publishes `invitation.approved` on the property's Redis channel with the matching
+  invitation id, proving the service-layer hooks fire after commit.
+
+## 2.1 Browser E2E
+
+`apps/web/e2e/visitor-flow.spec.ts` runs in a real Chrome instance via `channel: "chrome"`. Playwright starts
+`scripts/e2e-api.sh`, which drops and recreates `parkvanta_e2e`, applies all migrations, loads the demo seed and
+serves the API on `127.0.0.1:8091`; Vite runs on `127.0.0.1:5173` with `VITE_API_BASE_URL` pointed at it.
+
+The test performs the acceptance scenario without touching the database:
+
+1. Resident signs in, creates a vehicle-backed invitation and approves it.
+2. The issued pass URL is opened in a separate browser context; the QR renders in the visitor view.
+3. Guard signs in, pastes the pass, verifies, authorizes entry and confirms the vehicle entered.
+4. The slot is reported `OCCUPIED`; the vehicle appears inside.
+5. Guard confirms exit; the active list returns to the empty state.
+6. Society admin signs in and the overview renders capacity.
+
+To run in CI without Google Chrome, install browsers and set `PLAYWRIGHT_CHANNEL=chromium`.
+
 ## 3. Frontend tests
 
 - Pass-token extraction from raw tokens, visitor URLs, query strings and fragments.
@@ -65,7 +90,7 @@ The production build type-checks the entire client (`tsc --noEmit`).
 
 | Area | Status |
 | :--- | :--- |
-| Playwright browser E2E | Planned (Stage 15) |
+| Offline gate queue E2E | Blocked until offline mode is designed |
 | Load/soak testing | Planned — target: 50 concurrent gates per property |
 | Dependency CVE gate | Planned (`pip-audit`, `npm audit --omit=dev`) |
 | Vision accuracy suite | Blocked on Stage 13 |

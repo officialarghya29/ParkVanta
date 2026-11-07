@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, AlertTriangle, Car, Gauge, ShieldCheck } from "lucide-react";
 import {
   Area,
@@ -19,6 +19,7 @@ import {
   Stat,
   statusTone,
 } from "../components/ui";
+import { useEventStream } from "../hooks/useEventStream";
 import { api } from "../lib/api";
 import { formatDateTime, formatTime, titleCase } from "../lib/format";
 import type {
@@ -43,6 +44,7 @@ const SLOT_TONE: Record<string, string> = {
 
 export function AdminPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const properties = useQuery({
     queryKey: ["properties"],
     queryFn: () => api<Property[]>("/properties"),
@@ -50,11 +52,18 @@ export function AdminPage() {
   const propertyId = user?.property_id ?? properties.data?.[0]?.id;
   const property = properties.data?.find((item) => item.id === propertyId);
 
+  const live = useEventStream(propertyId, () => {
+    void queryClient.invalidateQueries({ queryKey: ["analytics"] });
+    void queryClient.invalidateQueries({ queryKey: ["slots"] });
+    void queryClient.invalidateQueries({ queryKey: ["reservations"] });
+    void queryClient.invalidateQueries({ queryKey: ["gate"] });
+  });
+
   const overview = useQuery({
     queryKey: ["analytics", "overview", propertyId],
     queryFn: () => api<Overview>(`/analytics/overview?property_id=${propertyId}`),
     enabled: Boolean(propertyId),
-    refetchInterval: 20_000,
+    refetchInterval: live ? 60_000 : 20_000,
   });
   const utilization = useQuery({
     queryKey: ["analytics", "utilization", propertyId],
@@ -88,7 +97,7 @@ export function AdminPage() {
   const activity = useQuery({
     queryKey: ["gate", "recent"],
     queryFn: () => api<GateEvent[]>("/gate/recent-activity?limit=8"),
-    refetchInterval: 20_000,
+    refetchInterval: live ? 60_000 : 20_000,
   });
 
   if (!propertyId) {
@@ -121,16 +130,16 @@ export function AdminPage() {
               "Live parking and gate telemetry"}
           </p>
         </div>
-        <Badge tone="teal">
-          <span className="h-1.5 w-1.5 rounded-full bg-teal-bright" />
-          Refreshing every 20s
+        <Badge tone={live ? "teal" : "slate"}>
+          <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-teal-bright" : "bg-slate-500"}`} />
+          {live ? "Live telemetry" : "Refreshing every 20s"}
         </Badge>
       </div>
 
       {overview.isLoading ? <Spinner label="Loading operational telemetry" /> : null}
 
       {data ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div data-testid="overview" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Total capacity" value={data.total_slots} suffix="slots" />
           <Stat label="Available" value={data.available_slots} accent="teal" />
           <Stat label="Occupied" value={data.occupied_slots} />

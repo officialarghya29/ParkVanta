@@ -20,6 +20,7 @@ import {
   Stat,
   statusTone,
 } from "../components/ui";
+import { useEventStream } from "../hooks/useEventStream";
 import { api } from "../lib/api";
 import { formatDateTime, toDateTimeLocal, titleCase } from "../lib/format";
 import type { ApproveResponse, Availability, Invitation, Page } from "../lib/types";
@@ -98,6 +99,11 @@ export function ResidentPage() {
   const availability = useQuery({
     queryKey: ["availability", user?.property_id],
     queryFn: () => api<Availability>(`/parking/availability?property_id=${user?.property_id}`),
+  });
+
+  const live = useEventStream(user?.property_id, () => {
+    void queryClient.invalidateQueries({ queryKey: ["invitations"] });
+    void queryClient.invalidateQueries({ queryKey: ["availability"] });
   });
 
   const createInvitation = useMutation({
@@ -180,9 +186,9 @@ export function ResidentPage() {
             Issue a visitor pass, approve access, and see exactly where the vehicle will park.
           </p>
         </div>
-        <Badge tone="teal">
-          <span className="h-1.5 w-1.5 rounded-full bg-teal-bright" />
-          Apartment access verified
+        <Badge tone={live ? "teal" : "slate"}>
+          <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-teal-bright" : "bg-slate-500"}`} />
+          {live ? "Live updates on" : "Apartment access verified"}
         </Badge>
       </div>
 
@@ -233,7 +239,9 @@ export function ResidentPage() {
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-abyss-soft/70 p-3">
-                <p className="truncate font-mono text-[11px] text-slate-400">{passUrl}</p>
+                <p data-testid="pass-url" className="truncate font-mono text-[11px] text-slate-400">
+                  {passUrl}
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={copyLink}>
@@ -265,13 +273,21 @@ export function ResidentPage() {
             onSubmit={form.handleSubmit((values) => createInvitation.mutate(values))}
           >
             <Field label="Visitor name" error={form.formState.errors.visitor_name?.message}>
-              <Input placeholder="Rahul Sharma" {...form.register("visitor_name")} />
+              <Input
+                data-testid="visitor-name"
+                placeholder="Rahul Sharma"
+                {...form.register("visitor_name")}
+              />
             </Field>
             <Field label="Mobile" hint="optional">
               <Input placeholder="9876543210" {...form.register("visitor_phone")} />
             </Field>
             <Field label="Vehicle number" hint="optional">
-              <Input placeholder="KA01AB1234" {...form.register("vehicle_registration")} />
+              <Input
+                data-testid="vehicle-registration"
+                placeholder="KA01AB1234"
+                {...form.register("vehicle_registration")}
+              />
             </Field>
             <Field label="Vehicle class">
               <Select {...form.register("vehicle_category")}>
@@ -302,7 +318,12 @@ export function ResidentPage() {
               <Input type="datetime-local" {...form.register("expected_departure")} />
             </Field>
             <div className="sm:col-span-2">
-              <Button type="submit" className="w-full sm:w-auto" disabled={createInvitation.isPending}>
+              <Button
+                data-testid="create-invitation"
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={createInvitation.isPending}
+              >
                 <Plus className="h-4 w-4" />
                 {createInvitation.isPending ? "Creating…" : "Create invitation"}
               </Button>
@@ -347,6 +368,7 @@ export function ResidentPage() {
                 {invitation.status === "PENDING" ? (
                   <div className="mt-3 flex gap-2">
                     <Button
+                      data-testid="approve-invitation"
                       className="px-3 py-1.5 text-xs"
                       onClick={() => approve.mutate(invitation.id)}
                       disabled={approve.isPending}

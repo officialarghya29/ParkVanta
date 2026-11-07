@@ -26,7 +26,7 @@ from app.schemas.parking import (
     OccupancyOut,
     ReservationOut,
 )
-from app.services import audit_service, parking_service
+from app.services import audit_service, event_service, parking_service
 
 router = APIRouter(prefix="/parking", tags=["Parking"])
 
@@ -84,6 +84,11 @@ def allocate(
         ip_address=client_ip(request),
     )
     db.commit()
+    event_service.publish_event(
+        "parking.updated",
+        property_id=invitation.property_id,
+        data={"invitation_id": str(invitation.id), "slot_code": slot.code, "reason": "allocation"},
+    )
     visitor = db.get(Visitor, invitation.visitor_id)
     return ReservationOut(
         id=reservation.id,

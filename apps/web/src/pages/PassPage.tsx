@@ -64,6 +64,7 @@ export function PassPage() {
             <div className="flex flex-col items-center gap-4 px-6 py-8">
               {qr ? (
                 <img
+                  data-testid="pass-qr"
                   src={qr}
                   alt="Entry QR code"
                   className="h-64 w-64 rounded-2xl bg-white p-3 shadow-[0_0_60px_-20px_rgba(46,230,200,0.7)]"

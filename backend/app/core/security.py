@@ -51,6 +51,33 @@ def create_access_token(*, user_id: UUID, organization_id: UUID, role: str) -> s
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
+def create_stream_token(*, user_id: UUID, organization_id: UUID, property_id: UUID) -> str:
+    """Short-lived ticket for EventSource, which cannot send Authorization headers."""
+    now = datetime.now(UTC)
+    payload: dict[str, Any] = {
+        "sub": str(user_id),
+        "org": str(organization_id),
+        "property": str(property_id),
+        "type": "stream",
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=settings.stream_ticket_minutes)).timestamp()),
+        "jti": secrets.token_hex(16),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def decode_stream_token(token: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except jwt.ExpiredSignatureError as exc:
+        raise TokenError("Stream ticket has expired") from exc
+    except jwt.InvalidTokenError as exc:
+        raise TokenError("Stream ticket is invalid") from exc
+    if payload.get("type") != "stream":
+        raise TokenError("Token is not a stream ticket")
+    return payload
+
+
 def decode_access_token(token: str) -> dict[str, Any]:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])

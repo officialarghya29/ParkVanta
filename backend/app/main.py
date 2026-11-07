@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import FastAPI, Request
@@ -13,6 +14,7 @@ from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging
 from app.database.session import engine
+from app.services import event_service
 
 configure_logging("DEBUG" if settings.debug else "INFO")
 logger = logging.getLogger("parkvanta")
@@ -40,8 +42,9 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-def _startup_checks() -> None:
+async def _startup_checks() -> None:
     settings.validate_for_production()
+    event_service.set_event_loop(asyncio.get_running_loop())
     logger.info("ParkVanta API starting in %s mode", settings.environment)
 
 

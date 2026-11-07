@@ -24,7 +24,7 @@ from app.models.enums import (
     Role,
     SlotStatus,
 )
-from app.services import audit_service, notification_service, parking_service, qr_service
+from app.services import audit_service, event_service, notification_service, parking_service, qr_service
 
 
 def _guard_scope(db: Session, guard: User, invitation: Invitation) -> None:
@@ -82,6 +82,12 @@ def authorize_entry(
                     ip_address=ip_address,
                 )
         db.commit()
+        if verdict.invitation_id is not None:
+            event_service.publish_event(
+                "gate.entry_denied",
+                property_id=db.get(Invitation, verdict.invitation_id).property_id,
+                data={"invitation_id": str(verdict.invitation_id), "reason": verdict.reason_code},
+            )
         status = 409 if verdict.reason_code in {"already_used", "expired"} else 403
         raise AppError(
             verdict.message,
@@ -144,6 +150,11 @@ def authorize_entry(
     )
     db.commit()
     db.refresh(event)
+    event_service.publish_event(
+        "gate.entry_authorized",
+        property_id=invitation.property_id,
+        data={"invitation_id": str(invitation.id), "slot_code": verdict.slot_code},
+    )
     return event, invitation, verdict
 
 
@@ -207,6 +218,20 @@ def confirm_entry(
         db.refresh(occupancy)
     if slot is not None:
         db.refresh(slot)
+    event_service.publish_event(
+        "gate.entry_confirmed",
+        property_id=invitation.property_id,
+        data={
+            "invitation_id": str(invitation.id),
+            "slot_code": slot.code if slot else None,
+            "slot_status": slot.status if slot else None,
+        },
+    )
+    event_service.publish_event(
+        "parking.updated",
+        property_id=invitation.property_id,
+        data={"reason": "occupancy_confirmed"},
+    )
     return occupancy, slot, already
 
 
@@ -277,6 +302,16 @@ def confirm_exit(
     db.commit()
     db.refresh(occupancy)
     db.refresh(slot)
+    event_service.publish_event(
+        "gate.exit_confirmed",
+        property_id=occupancy.property_id,
+        data={"invitation_id": str(occupancy.invitation_id), "slot_code": slot.code},
+    )
+    event_service.publish_event(
+        "parking.updated",
+        property_id=occupancy.property_id,
+        data={"reason": "occupancy_released"},
+    )
     return occupancy, slot, duration, overstay
 
 
@@ -347,6 +382,11 @@ def manual_override(
     )
     db.commit()
     db.refresh(event)
+    event_service.publish_event(
+        "gate.manual_override",
+        property_id=property_id,
+        data={"event_id": str(event.id), "direction": direction, "reason": reason.strip()},
+    )
     return event
 
 

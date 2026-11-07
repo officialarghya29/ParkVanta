@@ -24,7 +24,7 @@ from app.models.enums import (
     ReservationStatus,
     SlotStatus,
 )
-from app.services import notification_service, parking_service
+from app.services import event_service, notification_service, parking_service
 
 logger = logging.getLogger("parkvanta.workers.expiry")
 
@@ -84,7 +84,7 @@ def expire_pending_invitations(db: Session, now) -> int:
     return len(stale)
 
 
-def flag_overstays(db: Session, now) -> int:
+def flag_overstays(db: Session, now) -> list[tuple]:
     rows = db.execute(
         select(ParkingOccupancy, ParkingReservation, Invitation)
         .join(ParkingReservation, ParkingOccupancy.reservation_id == ParkingReservation.id)
@@ -96,7 +96,7 @@ def flag_overstays(db: Session, now) -> int:
         )
     ).all()
 
-    count = 0
+    flagged: list[tuple] = []
     for occupancy, reservation, invitation in rows:
         policy = parking_service.get_policy(db, property_id=occupancy.property_id)
         grace = timedelta(minutes=policy.overstay_grace_minutes)
@@ -110,19 +110,38 @@ def flag_overstays(db: Session, now) -> int:
             title="Visitor overstay",
             body="Your visitor has exceeded the expected departure time. Please contact the gate.",
         )
-        count += 1
-    return count
+        flagged.append((occupancy.property_id, invitation.id))
+    return flagged
 
 
 def run_expiry_sweep(db: Session) -> dict[str, int]:
     now = utcnow()
+    overstay_events = flag_overstays(db, now)
     result = {
         "expired_passes": expire_passes(db, now),
         "expired_reservations": expire_reservations(db, now),
         "expired_invitations": expire_pending_invitations(db, now),
-        "overstays_flagged": flag_overstays(db, now),
+        "overstays_flagged": len(overstay_events),
     }
     db.commit()
+
+    # Publish after commit so subscribers never read pre-transaction state.
+    for property_id, invitation_id in overstay_events:
+        event_service.publish_event(
+            "parking.overstay",
+            property_id=property_id,
+            data={"invitation_id": str(invitation_id)},
+        )
+    if result["expired_reservations"] or result["expired_passes"]:
+        for property_id, in db.execute(
+            select(ParkingReservation.property_id)
+            .where(ParkingReservation.status == ReservationStatus.EXPIRED.value)
+            .distinct()
+            .limit(20)
+        ).all():
+            event_service.publish_event(
+                "parking.updated", property_id=property_id, data={"reason": "expiry_sweep"}
+            )
     return result
 
 

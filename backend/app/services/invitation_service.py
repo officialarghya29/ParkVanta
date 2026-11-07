@@ -28,7 +28,7 @@ from app.models.enums import (
     Role,
 )
 from app.schemas.visitors import InvitationCreate
-from app.services import audit_service, notification_service, parking_service, qr_service
+from app.services import audit_service, event_service, notification_service, parking_service, qr_service
 
 
 def get_resident_profile(db: Session, user_id: UUID) -> ResidentProfile | None:
@@ -239,6 +239,11 @@ def create_invitation(
     )
     db.commit()
     db.refresh(invitation)
+    event_service.publish_event(
+        "invitation.created",
+        property_id=invitation.property_id,
+        data={"invitation_id": str(invitation.id), "status": invitation.status},
+    )
     return invitation
 
 
@@ -309,6 +314,16 @@ def approve_invitation(
     )
     db.commit()
     db.refresh(invitation)
+    event_service.publish_event(
+        "invitation.approved",
+        property_id=invitation.property_id,
+        data={"invitation_id": str(invitation.id), "slot_code": slot.code if slot else None},
+    )
+    event_service.publish_event(
+        "parking.updated",
+        property_id=invitation.property_id,
+        data={"invitation_id": str(invitation.id), "reason": "reservation_created"},
+    )
     return invitation, raw_token, slot
 
 
@@ -335,6 +350,11 @@ def reject_invitation(
     )
     db.commit()
     db.refresh(invitation)
+    event_service.publish_event(
+        "invitation.rejected",
+        property_id=invitation.property_id,
+        data={"invitation_id": str(invitation.id)},
+    )
     return invitation
 
 
@@ -381,6 +401,16 @@ def cancel_invitation(
     )
     db.commit()
     db.refresh(invitation)
+    event_service.publish_event(
+        "invitation.cancelled",
+        property_id=invitation.property_id,
+        data={"invitation_id": str(invitation.id)},
+    )
+    event_service.publish_event(
+        "parking.updated",
+        property_id=invitation.property_id,
+        data={"invitation_id": str(invitation.id), "reason": "reservation_released"},
+    )
     return invitation
 
 

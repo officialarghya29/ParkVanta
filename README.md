@@ -14,7 +14,7 @@ traceable lifecycle — enforced by PostgreSQL, not by a UI check.
 ![Status](https://img.shields.io/badge/status-MVP%20%C2%B7%20pilot--ready%20core-101B2D?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-16A394?style=for-the-badge)
 ![Frontend](https://img.shields.io/badge/surface-React%20%C2%B7%20TypeScript-101B2D?style=for-the-badge)
-![Tests](https://img.shields.io/badge/tests-17%20backend%20%C2%B7%205%20frontend-16A394?style=for-the-badge)
+![Tests](https://img.shields.io/badge/tests-21%20backend%20%C2%B7%205%20frontend%20%C2%B7%201%20e2e-16A394?style=for-the-badge)
 ![AI](https://img.shields.io/badge/vision-designed%20%C2%B7%20not%20deployed-101B2D?style=for-the-badge)
 
 </div>
@@ -53,7 +53,9 @@ occupancy and release are transactional domain operations.
 | Database-backed analytics and overstay detection | Live | `/analytics/*` endpoints |
 | Expiry/overstay sweep worker | Live | `python -m app.workers.expiry` |
 | Responsive PWA: resident, guard, visitor pass, admin | Live | Production build passing |
-| Realtime WebSocket push | Not implemented | Clients poll every 15–20s |
+| Realtime SSE (approvals, gate, parking) | Live | Stream tickets + Redis pub/sub; `tests/test_realtime.py` |
+| Admin inventory CRUD: properties, towers, units, zones, slots, policy | Live | `/admin/inventory` |
+| Browser E2E of the full visitor lifecycle | Live | `apps/web/e2e/visitor-flow.spec.ts` |
 | Email / SMS / WhatsApp delivery | Not configured | In-app notifications only |
 | Number-plate AI, occupancy vision | Designed only | `docs/AI_DESIGN.md` |
 
@@ -187,9 +189,10 @@ Seeded by `make seed`; password **`ParkVanta@2026`** (override with `SEED_PASSWO
 ## Testing
 
 ```bash
-make test                     # 17 backend tests on real PostgreSQL
-cd apps/web && npm test       # 5 frontend unit tests
-cd apps/web && npm run build  # type-check + production bundle
+make test                       # 21 backend tests on real PostgreSQL
+cd apps/web && npm test         # 5 frontend unit tests
+cd apps/web && npm run test:e2e # 1 Playwright lifecycle test (fresh E2E DB)
+cd apps/web && npm run build    # type-check + production bundle
 ```
 
 The backend suite runs against PostgreSQL (not SQLite) so locking and partial indexes behave exactly as in
@@ -198,6 +201,10 @@ shortage, cancellation, manual override auditing — and two thread-barrier conc
 
 - two simultaneous authorizations of one pass → exactly one success, one `already_used`;
 - two simultaneous allocations with one free slot → exactly one reservation, one `no_slot_available`.
+
+The realtime suite proves ticket scoping, SSE framing and Redis publication after approval. The Playwright test
+drives real Chrome through resident → visitor pass → guard authorization/entry/exit → admin overview against a
+freshly migrated and seeded `parkvanta_e2e` database.
 
 See [`docs/TESTING.md`](docs/TESTING.md) for the full report and manual acceptance script.
 
@@ -238,7 +245,7 @@ parkvanta/
 ├── apps/web/                    # React PWA (resident · guard · visitor · admin)
 ├── docs/                        # PRD · SRS · architecture · database · API · security · AI · testing · deployment
 ├── infrastructure/nginx/        # reference reverse proxy
-├── .github/workflows/ci.yml     # backend tests + frontend build
+├── .github/workflows/ci.yml     # backend + frontend + Playwright E2E
 ├── docker-compose.yml
 ├── Makefile
 └── .env.example
@@ -277,13 +284,12 @@ Full contracts: [`docs/API_SPECIFICATION.md`](docs/API_SPECIFICATION.md).
 
 | Limitation | Impact | Next step |
 | :--- | :--- | :--- |
-| Polling instead of WebSockets/SSE | Dashboards refresh every 15–20s | Add SSE with Redis fan-out |
 | No offline gate queue | Gate requires connectivity | Signed offline credentials + reconciliation |
 | No email/SMS/WhatsApp provider | Pass links are copied/shared by the resident | Add a notification adapter with retry/status |
 | Access token in `localStorage` | Larger XSS blast radius | In-memory token + strict CSP |
 | Registration requires property/apartment IDs | No public onboarding wizard | Society invite codes + discovery endpoint |
-| Admin UI is read-focused for inventory | Slot creation via API/seed | Inventory CRUD screens |
-| No Playwright E2E or load tests | Browser regressions not gated | Add Playwright + k6 before pilot |
+| SSE has no replay window | Events during a disconnect are missed until the next poll/refetch | `Last-Event-ID` replay over Redis Streams |
+| No load/soak test | Capacity at pilot scale is unmeasured | k6 gate with a 50-concurrent-gate target |
 | Vision AI not deployed | No ANPR/occupancy inference | Stage 13 with measured accuracy |
 
 ## Roadmap
@@ -300,12 +306,13 @@ Full contracts: [`docs/API_SPECIFICATION.md`](docs/API_SPECIFICATION.md).
 - [x] **9** Concurrency-safe parking allocation engine
 - [x] **10** Gate operations and audited manual override
 - [x] **11** Resident, guard, visitor and admin interfaces
-- [x] **12** In-app notifications and polling refresh
+- [x] **12** In-app notifications, polling fallback and SSE push
 - [x] **13** Analytics, overstays and expiry worker
-- [ ] **14** Realtime SSE/WebSocket gateway
+- [x] **14** Realtime SSE gateway with Redis fan-out and signed stream tickets
 - [ ] **15** Controlled offline gate mode
 - [ ] **16** ParkVanta Vision (ANPR + occupancy) with evaluation protocol
-- [ ] **17** Playwright E2E, load tests, dependency CVE gate
+- [x] **17a** Playwright E2E of the visitor lifecycle
+- [ ] **17b** Load/soak tests and dependency CVE gate
 - [ ] **18** Pilot at one property and production hardening
 
 ## Documentation

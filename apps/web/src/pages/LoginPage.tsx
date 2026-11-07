@@ -89,6 +89,7 @@ export function LoginPage() {
             <form className="mt-6 space-y-4" onSubmit={submit}>
               <Field label="Email">
                 <Input
+                  data-testid="login-email"
                   type="email"
                   autoComplete="email"
                   value={email}
@@ -98,6 +99,7 @@ export function LoginPage() {
               </Field>
               <Field label="Password">
                 <Input
+                  data-testid="login-password"
                   type="password"
                   autoComplete="current-password"
                   value={password}
@@ -106,7 +108,7 @@ export function LoginPage() {
                 />
               </Field>
               {error ? <ErrorNote message={error} /> : null}
-              <Button type="submit" className="w-full" disabled={busy}>
+              <Button data-testid="login-submit" type="submit" className="w-full" disabled={busy}>
                 {busy ? "Verifying…" : "Enter control room"}
                 <ArrowRight className="h-4 w-4" />
               </Button>

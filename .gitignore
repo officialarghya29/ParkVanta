@@ -1,0 +1,54 @@
+# ─── Secrets & environment ───────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+!**/public/*.pem
+
+# ─── Python ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+.bandit
+
+# ─── Node / frontend ─────────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# ─── Vision artifacts ────────────────────────────────────────────────────
+*.onnx
+*.pt
+*.pth
+*.weights
+models/**/*.bin
+
+# ─── Runtime & logs ──────────────────────────────────────────────────────
+*.log
+logs/
+celerybeat-schedule
+postgres-data/
+redis-data/
+uploads/
+tmp/
+
+# ─── Editors & OS ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

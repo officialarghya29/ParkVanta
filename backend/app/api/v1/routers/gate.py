@@ -21,7 +21,8 @@ from app.schemas.gate import (
     ManualOverrideRequest,
     ManualOverrideResponse,
 )
-from app.services import gate_service
+from app.schemas.offline import OfflineReconcileRequest, OfflineReconcileResponse
+from app.services import gate_service, offline_service
 
 router = APIRouter(prefix="/gate", tags=["Gate Operations"])
 
@@ -120,6 +121,31 @@ def manual_override(
         event_id=event.id,
         recorded_at=event.created_at,
         message="Manual override recorded in the audit trail",
+    )
+
+
+@router.post("/offline/reconcile", response_model=OfflineReconcileResponse)
+def reconcile_offline(
+    payload: OfflineReconcileRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    guard: GateUser,
+) -> OfflineReconcileResponse:
+    results = offline_service.reconcile(
+        db,
+        guard=guard,
+        property_id=payload.property_id,
+        device_id=payload.device_id,
+        actions=payload.actions,
+        ip_address=client_ip(request),
+    )
+    return OfflineReconcileResponse(
+        device_id=payload.device_id,
+        received=len(results),
+        applied=sum(1 for row in results if row["status"] in {"applied", "already_applied"}),
+        duplicates=sum(1 for row in results if row["status"] == "duplicate"),
+        rejected=sum(1 for row in results if row["status"] == "rejected"),
+        results=results,
     )
 
 

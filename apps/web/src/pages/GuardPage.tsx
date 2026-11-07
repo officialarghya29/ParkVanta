@@ -6,11 +6,13 @@ import {
   Clock,
   DoorOpen,
   LogOut,
+  RefreshCw,
   ScanLine,
   ShieldAlert,
+  WifiOff,
   XCircle,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -29,11 +31,21 @@ import { useAuth } from "../auth/AuthContext";
 import { useEventStream } from "../hooks/useEventStream";
 import { api } from "../lib/api";
 import { extractPassToken, formatDateTime, formatTime, titleCase } from "../lib/format";
+import {
+  cacheActiveVisitors,
+  enqueue,
+  getDeviceId,
+  newClientEventId,
+  readCachedVisitors,
+  readQueue,
+  removeQueued,
+} from "../lib/offlineQueue";
 import type {
   ActiveVisitor,
   ConfirmEntry,
   EntryAuthorization,
   GateEvent,
+  OfflineReconcileResponse,
   VerifyResponse,
 } from "../lib/types";
 
@@ -51,6 +63,12 @@ export function GuardPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
   const [overrideDirection, setOverrideDirection] = useState("ENTRY");
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [cachedActive, setCachedActive] = useState<ActiveVisitor[]>(readCachedVisitors);
+  const [pendingCount, setPendingCount] = useState(() => readQueue().length);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const flushing = useRef(false);
   const scannerRef = useRef<{ stop: () => Promise<void> } | null>(null);
 
   const live = useEventStream(user?.property_id, () => {
@@ -67,6 +85,56 @@ export function GuardPage() {
     queryFn: () => api<GateEvent[]>("/gate/recent-activity?limit=8"),
     refetchInterval: live ? 60_000 : 15_000,
   });
+
+  const flushQueue = useCallback(async () => {
+    const queue = readQueue();
+    if (!queue.length || !user?.property_id || flushing.current) return;
+    flushing.current = true;
+    setSyncing(true);
+    try {
+      const response = await api<OfflineReconcileResponse>("/gate/offline/reconcile", {
+        method: "POST",
+        json: { property_id: user.property_id, device_id: getDeviceId(), actions: queue },
+      });
+      removeQueued(queue.map((item) => item.client_event_id));
+      setPendingCount(readQueue().length);
+      setSyncMessage(
+        response.rejected
+          ? `Synced ${response.applied} · ${response.duplicates} duplicate · ${response.rejected} rejected`
+          : `Synced ${response.applied} offline action(s)${
+              response.duplicates ? ` · ${response.duplicates} already applied` : ""
+            }`,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["gate"] });
+    } catch (error) {
+      setSyncMessage(`Sync failed — actions retained. ${(error as Error).message}`);
+    } finally {
+      flushing.current = false;
+      setSyncing(false);
+    }
+  }, [queryClient, user?.property_id]);
+
+  useEffect(() => {
+    const goOnline = () => {
+      setOnline(true);
+      void flushQueue();
+    };
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    if (navigator.onLine && readQueue().length) void flushQueue();
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, [flushQueue]);
+
+  useEffect(() => {
+    if (active.data) {
+      setCachedActive(active.data);
+      cacheActiveVisitors(active.data);
+    }
+  }, [active.data]);
 
   useEffect(() => {
     return () => {
@@ -173,6 +241,30 @@ export function GuardPage() {
   }
 
   const error = verify.error ?? authorize.error ?? confirmEntry.error ?? confirmExit.error;
+  const activeVisitors = active.data ?? (online ? [] : cachedActive);
+
+  function requestExit(visitor: ActiveVisitor) {
+    if (!online) {
+      enqueue({
+        client_event_id: newClientEventId(),
+        action: "EXIT_CONFIRM",
+        invitation_id: visitor.invitation_id,
+        recorded_at: new Date().toISOString(),
+      });
+      setPendingCount(readQueue().length);
+      setCachedActive((previous) =>
+        previous.filter((item) => item.invitation_id !== visitor.invitation_id),
+      );
+      queryClient.setQueryData<ActiveVisitor[]>(["gate", "active"], (previous) =>
+        previous?.filter((item) => item.invitation_id !== visitor.invitation_id),
+      );
+      setSyncMessage(
+        "Exit queued on this device. It reconciles automatically when the connection returns.",
+      );
+      return;
+    }
+    confirmExit.mutate(visitor.invitation_id);
+  }
 
   return (
     <div className="space-y-8">
@@ -191,18 +283,54 @@ export function GuardPage() {
             <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-teal-bright" : "bg-slate-500"}`} />
             {live ? "Live" : "Polling"}
           </Badge>
-          <Badge tone={active.data?.some((visitor) => visitor.overstay) ? "amber" : "teal"}>
+          <Badge tone={activeVisitors.some((visitor) => visitor.overstay) ? "amber" : "teal"}>
             <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {active.data?.length ?? 0} vehicles inside
+            {activeVisitors.length} vehicle{activeVisitors.length === 1 ? "" : "s"} inside
           </Badge>
         </div>
       </div>
 
+      {!online || pendingCount > 0 ? (
+        <div
+          data-testid="offline-banner"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3"
+        >
+          <div className="flex items-start gap-3">
+            <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+            <div>
+              <p className="text-sm text-amber-100">
+                {online ? `${pendingCount} gate action(s) awaiting sync` : "Offline mode · cached gate state"}
+              </p>
+              <p className="mt-0.5 text-xs text-amber-200/70">
+                Entry authorization stays online. Exit confirmations and audited overrides are queued on
+                this device with timestamp and device id.
+              </p>
+            </div>
+          </div>
+          {online && pendingCount > 0 ? (
+            <Button
+              data-testid="offline-sync"
+              variant="secondary"
+              onClick={() => void flushQueue()}
+              disabled={syncing}
+            >
+              <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Syncing…" : "Sync now"}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {syncMessage ? (
+        <p data-testid="offline-sync-result" className="text-xs text-slate-400">
+          {syncMessage}
+        </p>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Inside now" value={active.data?.length ?? "—"} accent="teal" />
+        <Stat label="Inside now" value={activeVisitors.length} accent="teal" />
         <Stat
           label="Overstays"
-          value={active.data?.filter((visitor) => visitor.overstay).length ?? 0}
+          value={activeVisitors.filter((visitor) => visitor.overstay).length}
           accent="amber"
         />
         <Stat label="Logged actions" value={recent.data?.length ?? 0} suffix="recent" />
@@ -250,11 +378,18 @@ export function GuardPage() {
                 setVerdict(null);
                 verify.mutate();
               }}
-              disabled={!token || verify.isPending}
+              disabled={!token || verify.isPending || !online}
             >
               <ScanLine className="h-4 w-4" />
               {verify.isPending ? "Verifying…" : "Verify pass"}
             </Button>
+
+            {!online ? (
+              <p className="rounded-xl border border-amber-400/25 bg-amber-400/[0.05] px-3 py-2 text-xs text-amber-200">
+                Entry verification requires a connection. Cached reads, exit confirmations and audited
+                overrides remain available offline.
+              </p>
+            ) : null}
 
             {error ? <ErrorNote message={(error as Error).message} /> : null}
 
@@ -336,11 +471,11 @@ export function GuardPage() {
           <Card className="p-6">
             <SectionTitle title="Vehicles inside" caption="Confirm exit to release the slot" />
             <div className="mt-4 space-y-3">
-              {active.isLoading ? <Spinner /> : null}
-              {!active.isLoading && (active.data?.length ?? 0) === 0 ? (
+              {active.isLoading && activeVisitors.length === 0 ? <Spinner /> : null}
+              {!active.isLoading && activeVisitors.length === 0 ? (
                 <EmptyState title="No vehicles inside" body="Confirmed entries appear here." />
               ) : null}
-              {active.data?.map((visitor) => (
+              {activeVisitors.map((visitor) => (
                 <div
                   key={visitor.invitation_id}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"
@@ -363,7 +498,7 @@ export function GuardPage() {
                     data-testid="guard-exit"
                     variant="secondary"
                     className="px-3 py-1.5 text-xs"
-                    onClick={() => confirmExit.mutate(visitor.invitation_id)}
+                    onClick={() => requestExit(visitor)}
                     disabled={confirmExit.isPending}
                   >
                     <LogOut className="h-3.5 w-3.5" /> Confirm exit
@@ -406,7 +541,24 @@ export function GuardPage() {
                     variant="danger"
                     className="w-full"
                     disabled={overrideReason.trim().length < 10 || override.isPending}
-                    onClick={() => override.mutate()}
+                    onClick={() => {
+                      if (!online) {
+                        enqueue({
+                          client_event_id: newClientEventId(),
+                          action: "MANUAL_OVERRIDE",
+                          reason: overrideReason,
+                          direction: overrideDirection as "ENTRY" | "EXIT",
+                          plate_number: plate || undefined,
+                          invitation_id: verdict?.invitation_id ?? undefined,
+                          recorded_at: new Date().toISOString(),
+                        });
+                        setPendingCount(readQueue().length);
+                        setOverrideReason("");
+                        setSyncMessage("Manual override queued for reconciliation.");
+                        return;
+                      }
+                      override.mutate();
+                    }}
                   >
                     <AlertTriangle className="h-4 w-4" /> Record
                   </Button>

@@ -33,6 +33,7 @@ export function useEventStream(
 ): boolean {
   const [connected, setConnected] = useState(false);
   const handler = useRef(onEvent);
+  const cursor = useRef<string | null>(null);
   handler.current = onEvent;
 
   useEffect(() => {
@@ -48,9 +49,9 @@ export function useEventStream(
           json: { property_id: propertyId },
         });
         if (closed) return;
-        source = new EventSource(
-          `${API_BASE_URL}/events/stream?ticket=${encodeURIComponent(ticket)}`,
-        );
+        const params = new URLSearchParams({ ticket });
+        if (cursor.current) params.set("last_event_id", cursor.current);
+        source = new EventSource(`${API_BASE_URL}/events/stream?${params.toString()}`);
         source.onopen = () => setConnected(true);
         source.onerror = () => {
           setConnected(false);
@@ -60,8 +61,10 @@ export function useEventStream(
         };
         for (const type of EVENT_TYPES) {
           source.addEventListener(type, (event) => {
+            const message = event as MessageEvent;
+            if (message.lastEventId) cursor.current = message.lastEventId;
             try {
-              handler.current(JSON.parse((event as MessageEvent).data) as RealtimeEvent);
+              handler.current(JSON.parse(message.data) as RealtimeEvent);
             } catch {
               // Ignore malformed frames; polling still reconciles state.
             }

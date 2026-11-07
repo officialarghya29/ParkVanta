@@ -1,0 +1,20 @@
+{
+  "recorded_at": "2026-11-08",
+  "source": "pytest -q, vitest run, playwright test, FastAPI OpenAPI introspection",
+  "backend_tests": 28,
+  "frontend_tests": 5,
+  "e2e_tests": 1,
+  "openapi_paths": 53,
+  "openapi_operations": 62,
+  "db_tables": 23,
+  "migrations": 2,
+  "concurrency_proofs": 2,
+  "failed_tests": 0,
+  "build": {
+    "js_kb": 885.14,
+    "js_gzip_kb": 264.8,
+    "css_kb": 35.09,
+    "css_gzip_kb": 6.84
+  },
+  "benchmark_file": "docs/benchmarks/local-20c.json"
+}

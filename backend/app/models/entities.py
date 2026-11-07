@@ -343,6 +343,37 @@ class EntryExitEvent(UUIDPrimaryKeyMixin, Base):
     )
 
 
+class OfflineGateAction(UUIDPrimaryKeyMixin, Base):
+    """Idempotency ledger for gate actions queued while a device was offline."""
+
+    __tablename__ = "offline_gate_actions"
+    __table_args__ = (
+        UniqueConstraint(
+            "property_id", "client_event_id", name="uq_offline_action_property_client"
+        ),
+        Index("ix_offline_action_property_synced", "property_id", "synced_at"),
+    )
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    property_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("properties.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    guard_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    client_event_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="APPLIED")
+    device_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    result: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
 class AuditLog(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "audit_logs"
     __table_args__ = (Index("ix_audit_org_created", "organization_id", "created_at"),)

@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -47,7 +47,11 @@ def issue_ticket(
     "/stream",
     summary="Server-sent events for a property (advisory; REST remains authoritative)",
 )
-async def stream(ticket: str = Query(min_length=20)) -> StreamingResponse:
+async def stream(
+    ticket: str = Query(min_length=20),
+    last_event_id: str | None = Query(default=None, max_length=64),
+    last_event_id_header: str | None = Header(default=None, alias="Last-Event-ID"),
+) -> StreamingResponse:
     try:
         claims = decode_stream_token(ticket)
     except TokenError as exc:
@@ -68,7 +72,7 @@ async def stream(ticket: str = Query(min_length=20)) -> StreamingResponse:
         assert_property_access(db, user, property_id)
 
     return StreamingResponse(
-        event_service.event_stream(property_id),
+        event_service.event_stream(property_id, last_event_id_header or last_event_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

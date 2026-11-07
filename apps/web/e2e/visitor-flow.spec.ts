@@ -50,7 +50,19 @@ test("resident issues a pass; guard authorizes entry, confirms and releases the 
   await expect(guard.getByText(/is now OCCUPIED/)).toBeVisible();
   await expect(guard.getByText(guest).first()).toBeVisible();
 
+  // Network loss: entry verification locks, but the exit is queued locally.
+  await guardContext.setOffline(true);
+  await expect(guard.getByTestId("offline-banner")).toBeVisible();
+  await expect(guard.getByTestId("guard-verify")).toBeDisabled();
   await guard.getByTestId("guard-exit").first().click();
+  await expect(guard.getByTestId("offline-sync-result")).toContainText(/queued/i);
+  await expect(guard.getByText("No vehicles inside")).toBeVisible();
+
+  // Restoring the connection replays the queue exactly once.
+  await guardContext.setOffline(false);
+  await expect(guard.getByTestId("offline-sync-result")).toContainText(/Synced/i, {
+    timeout: 20_000,
+  });
   await expect(guard.getByText("No vehicles inside")).toBeVisible();
 
   const adminContext = await browser.newContext();

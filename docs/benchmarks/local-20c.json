@@ -1,0 +1,189 @@
+{
+  "generated_at": "2026-11-07T20:06:08.264341+00:00",
+  "target": "http://127.0.0.1:8092/api/v1",
+  "environment": {
+    "host": "ravan",
+    "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
+    "cpu": "AMD Ryzen 7 8840HS w/ Radeon 780M Graphics",
+    "cpu_count": 16,
+    "python": "3.12.3",
+    "postgres": "16 (Docker, local port 55432)",
+    "redis": "7 (Docker, local port 56379)"
+  },
+  "scenario": {
+    "concurrency": 20,
+    "duration_seconds": 20,
+    "mix": {
+      "availability": 40,
+      "overview": 30,
+      "active_visitors": 20,
+      "recent_activity": 10
+    },
+    "endpoints": {
+      "availability": "/parking/availability?property_id=0e525d75-2288-47ce-880b-07557bbf7b3b",
+      "overview": "/analytics/overview?property_id=0e525d75-2288-47ce-880b-07557bbf7b3b",
+      "active_visitors": "/gate/active-visitors",
+      "recent_activity": "/gate/recent-activity?limit=8"
+    }
+  },
+  "totals": {
+    "requests": 3912,
+    "successful": 3912,
+    "errors": 0,
+    "error_rate_percent": 0.0,
+    "rps": 195.06,
+    "elapsed_seconds": 20.06,
+    "status_counts": {
+      "200": 3912
+    }
+  },
+  "latency_ms": {
+    "count": 3912,
+    "mean_ms": 102.18,
+    "p50_ms": 90.66,
+    "p95_ms": 168.51,
+    "p99_ms": 236.39,
+    "max_ms": 321.93
+  },
+  "per_endpoint": {
+    "recent_activity": {
+      "count": 415,
+      "mean_ms": 85.37,
+      "p50_ms": 79.64,
+      "p95_ms": 121.69,
+      "p99_ms": 220.33,
+      "max_ms": 279.33
+    },
+    "availability": {
+      "count": 1578,
+      "mean_ms": 84.83,
+      "p50_ms": 81.48,
+      "p95_ms": 117.04,
+      "p99_ms": 198.61,
+      "max_ms": 282.15
+    },
+    "active_visitors": {
+      "count": 751,
+      "mean_ms": 85.67,
+      "p50_ms": 81.58,
+      "p95_ms": 118.55,
+      "p99_ms": 194.17,
+      "max_ms": 316.19
+    },
+    "overview": {
+      "count": 1168,
+      "mean_ms": 142.22,
+      "p50_ms": 139.73,
+      "p95_ms": 186.72,
+      "p99_ms": 260.91,
+      "max_ms": 321.93
+    }
+  },
+  "timeline": [
+    {
+      "epoch_second": 1794081948,
+      "requests": 122,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081949,
+      "requests": 203,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081950,
+      "requests": 186,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081951,
+      "requests": 206,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081952,
+      "requests": 206,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081953,
+      "requests": 197,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081954,
+      "requests": 195,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081955,
+      "requests": 194,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081956,
+      "requests": 191,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081957,
+      "requests": 208,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081958,
+      "requests": 198,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081959,
+      "requests": 199,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081960,
+      "requests": 200,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081961,
+      "requests": 175,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081962,
+      "requests": 200,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081963,
+      "requests": 200,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081964,
+      "requests": 210,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081965,
+      "requests": 196,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081966,
+      "requests": 188,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081967,
+      "requests": 197,
+      "errors": 0
+    },
+    {
+      "epoch_second": 1794081968,
+      "requests": 41,
+      "errors": 0
+    }
+  ]
+}

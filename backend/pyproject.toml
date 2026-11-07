@@ -3,6 +3,7 @@ name = "parkvanta-backend"
 version = "0.1.0"
 description = "ParkVanta visitor verification and parking allocation API"
 requires-python = ">=3.12"
+license = { text = "Proprietary — all rights reserved by the ParkVanta Team" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

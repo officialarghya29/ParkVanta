@@ -6,6 +6,7 @@
 | :--- | :--- | :--- |
 | Visitor entry | Forged or replayed QR | Server-side validation, hashed single-use tokens, atomic consumption |
 | Parking inventory | Double allocation | Row locks, `SKIP LOCKED`, partial unique indexes |
+| Offline queue | Replay / forged entry | Online-only authorization, unique client-event ledger, clock checks |
 | Tenant data | Cross-society reads | Query scoping + service assertions + regression tests |
 | Accounts | Credential stuffing | Argon2id, login rate limits, generic failure messages |
 | Sessions | Refresh token theft | Rotation, family revocation on replay, httpOnly cookie |
@@ -68,6 +69,27 @@ Recorded actions include: registration, login success/failure, refresh replay, a
 create/approve/reject/cancel, pass revocation, entry authorization, entry confirm, exit, manual override,
 slot changes and policy changes. Audit rows include organization, actor, entity, IP where available, and JSON
 metadata, and are written in the same transaction as the operation.
+
+## 6.1 Offline gate actions
+
+- A disconnected guard device **cannot authorize a pass**. `ENTRY_CONFIRM` is accepted only when an
+  `AUTHORIZED` entry event already exists for the invitation; otherwise the action is rejected with
+  `authorization_required`.
+- Queue entries carry `client_event_id`, `device_id` and `recorded_at`. The unique
+  `(property_id, client_event_id)` index makes retries idempotent.
+- Timestamps more than 5 minutes ahead of server time are rejected (`clock_mismatch`); actions older than
+  7 days are rejected (`stale_action`). Server `created_at` is authoritative for audit ordering.
+- Local storage is convenience state, not trust: reconciliation always reloads the invitation, occupancy and
+  slot state from PostgreSQL and enforces guard/property scope.
+
+## 6.2 Realtime stream tickets
+
+- Stream tickets are signed JWTs scoped to one property, valid for 2 minutes, and verified against the
+  account's organization and active status before the stream opens.
+- The access token is never placed in a URL or query string.
+- Frames contain ids, event types and slot codes only; no visitor names, phones or plate numbers.
+- Events are advisory. A missing stream cannot block, authorize or release anything; REST refetch is the
+  recovery path.
 
 ## 7. Application hardening
 

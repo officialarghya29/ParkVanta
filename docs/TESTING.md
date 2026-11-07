@@ -4,14 +4,30 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **21 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **28 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
-| Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome) |
-| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 22 tables |
+| Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
+| Load benchmark | `make load-test` | **3,912 requests · 195.06 req/s · 0 errors** |
+| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 23 tables |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
 unique indexes are exercised with production semantics.
+
+## 1.1 Recorded load run
+
+`make load-test` boots an isolated `parkvanta_bench` database, seeds it, and drives authenticated reads for 20
+seconds at 20-way concurrency. The raw JSON is [`benchmarks/local-20c.json`](benchmarks/local-20c.json).
+
+| Metric | Recorded |
+| :--- | ---: |
+| Requests / throughput | 3,912 / 195.06 req/s |
+| Errors | 0 |
+| p50 / p95 / p99 | 90.66 / 168.51 / 236.39 ms |
+| Max observed | 321.93 ms |
+
+Environment: AMD Ryzen 7 8840HS, 16 threads, Linux x86_64, Python 3.12.3, PostgreSQL 16 and Redis 7 in Docker.
+This is a read-path baseline on one host, not a capacity guarantee.
 
 ## 2. What the backend suite proves
 
@@ -48,6 +64,17 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 - The stream returns `text/event-stream` and emits the `: connected` frame.
 - Approving an invitation publishes `invitation.approved` on the property's Redis channel with the matching
   invitation id, proving the service-layer hooks fire after commit.
+- The property Redis Stream retains the frame, and a stream opened with `last_event_id=0-0` replays the
+  approval event with its Stream id — the basis for reconnect recovery.
+
+**Offline reconciliation** (`test_offline.py`)
+- An offline exit releases the occupancy once; replaying the same client event is reported as a duplicate and
+  produces no second release or audit row.
+- An offline entry confirmation without a prior online authorization is rejected with `authorization_required`,
+  and the reserved slot stays reserved.
+- An offline entry confirmation after an online authorization succeeds.
+- A device timestamp one hour in the future is rejected with `clock_mismatch`.
+- A cross-tenant reconciliation request returns 403.
 
 ## 2.1 Browser E2E
 
@@ -61,8 +88,9 @@ The test performs the acceptance scenario without touching the database:
 2. The issued pass URL is opened in a separate browser context; the QR renders in the visitor view.
 3. Guard signs in, pastes the pass, verifies, authorizes entry and confirms the vehicle entered.
 4. The slot is reported `OCCUPIED`; the vehicle appears inside.
-5. Guard confirms exit; the active list returns to the empty state.
-6. Society admin signs in and the overview renders capacity.
+5. Guard goes offline: entry verification locks and the exit is queued in browser storage.
+6. The vehicle leaves the displayed list optimistically; reconnecting reconciles the queue exactly once.
+7. Society admin signs in and the overview renders capacity.
 
 To run in CI without Google Chrome, install browsers and set `PLAYWRIGHT_CHANNEL=chromium`.
 
@@ -90,11 +118,10 @@ The production build type-checks the entire client (`tsc --noEmit`).
 
 | Area | Status |
 | :--- | :--- |
-| Offline gate queue E2E | Blocked until offline mode is designed |
-| Load/soak testing | Planned — target: 50 concurrent gates per property |
+| Mixed write-path load | Read-path benchmark exists; contended allocation storms are not measured |
 | Dependency CVE gate | Planned (`pip-audit`, `npm audit --omit=dev`) |
 | Vision accuracy suite | Blocked on Stage 13 |
-| Offline queue reconciliation | Not implemented; requires design sign-off |
+| Long-disconnect replay (>500 frames) | Bounded Stream retention; older frames are reconciled by REST refetch |
 
 ## 6. Test data policy
 

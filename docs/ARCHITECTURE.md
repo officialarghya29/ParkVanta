@@ -20,18 +20,21 @@ flowchart LR
         QRE[QR engine]
         PARK[parking engine]
         GATE[gate operations]
+        OFF[offline reconciliation]
+        EV[SSE gateway · replay]
         AN[analytics]
         N[notifications]
     end
 
     PG[(PostgreSQL 16)]
-    RD[(Redis)]
+    RD[(Redis · limits · Streams)]
     W[Expiry worker]
     VIS[Vision service · optional]
 
     Client -->|HTTPS /api/v1| API
     API --> PG
-    API -. rate limit .-> RD
+    API -. advisory .-> RD
+    EV -. streams .-> RD
     W --> PG
     GATE -. advisory .-> VIS
 ```
@@ -100,21 +103,45 @@ Repeated exits return `409 already_exited` rather than silently succeeding.
 client POST /events/ticket {property_id}
   → verify bearer + property access
   → signed JWT ticket (2 min, property-scoped)
-client GET /events/stream?ticket=…
-  → verify signature/scope, subscribe Redis pv:events:<property_id>
+client GET /events/stream?ticket=…[&last_event_id=…]
+  → verify signature/scope
+  → XREAD pv:stream:<property_id> from the last frame id
+  → replay retained frames, then tail live frames
 service commits transaction
   → publish_event(type, property_id, data)   -- never before commit
-  → SSE frame: id, type, occurred_at, data
+  → XADD stream (500-frame window) + PUBLISH
+  → SSE frame: id (Stream id), type, occurred_at, data
 client invalidates TanStack Query keys → refetch REST
 ```
 
 Events are a latency optimisation, not state. Publishing happens after `db.commit()` in invitation, gate,
-allocation and expiry paths. If Redis or the stream drops, polling intervals (15–20s, relaxed to 60s while
-connected) still converge on PostgreSQL. Stream tickets avoid putting the access token in a URL and expire
-after two minutes.
+allocation, offline reconciliation and expiry paths. A reconnect can pass `Last-Event-ID` (or
+`last_event_id`) to recover retained frames; beyond the 500-frame window, clients refetch REST. If Redis or
+the stream drops, polling intervals (15–20s, relaxed to 60s while connected) still converge on PostgreSQL.
+Stream tickets avoid putting the access token in a URL and expire after two minutes.
+
+### 3.5 Offline gate reconciliation
+
+```text
+client loses network
+  → cache active visitors locally
+  → block verify/authorize (entry cannot be authorized offline)
+  → queue EXIT_CONFIRM / MANUAL_OVERRIDE with client_event_id, device_id, recorded_at
+client reconnects
+  → POST /gate/offline/reconcile (batch)
+      → reject clock skew > 5 min or age > 7 days
+      → reject ENTRY_CONFIRM without an online AUTHORIZED event
+      → apply each action through the normal gate service
+      → INSERT offline_gate_actions (unique property + client_event_id)
+  → duplicate replay returns `duplicate` without a second transition
+```
+
+The ledger is the idempotency boundary; the gate tables remain the source of truth. Server time is
+authoritative; the device timestamp is retained for audit and sanity checks only.
 
 ## 4. Data ownership and isolation
 
+- Offline action ledgers are scoped by `property_id` and unique per client event id.
 - Every scoped table carries `organization_id`; parking, invitations and events also carry `property_id`.
 - Residents read only their own invitations.
 - Guards read only their assigned property.
@@ -137,7 +164,7 @@ Nginx / managed ingress (TLS)
    ├── static SPA (apps/web build)
    └── /api → uvicorn (FastAPI, N workers)
                  ├── PostgreSQL (managed, backups, PITR)
-                 ├── Redis (rate limits, future fan-out)
+                 ├── Redis (rate limits, Streams replay, pub/sub)
                  └── worker timer (python -m app.workers.expiry)
 ```
 
@@ -147,7 +174,7 @@ Nginx / managed ingress (TLS)
 | :--- | :--- |
 | Modular monolith | Simpler transactions and ops; no independent scaling per domain yet |
 | Bearer access token in browser memory + httpOnly refresh cookie | Refresh is XSS-resistant; access token lifetime is 15 minutes |
-| Polling (15–20s) instead of WebSockets | Simpler failure model; realtime is a planned enhancement |
+| SSE + polling fallback instead of WebSockets | Simpler failure model, replay via Streams; database stays authoritative |
 | Slot chosen at approval, not at arrival | Guarantees a destination; may hold a slot for a no-show until expiry |
 | Pass issued at approval | Removes the "awaiting approval" scan state; the resident must approve before a pass exists |
 | External notifications recorded as `SKIPPED` until a provider is configured | No fake delivery claims |

@@ -253,6 +253,24 @@ export interface Zone {
   is_active: boolean;
 }
 
+export interface OfflineGateActionResult {
+  client_event_id: string;
+  action: string;
+  status: "applied" | "already_applied" | "duplicate" | "rejected";
+  code?: string | null;
+  message?: string | null;
+  result: Record<string, unknown>;
+}
+
+export interface OfflineReconcileResponse {
+  device_id: string;
+  received: number;
+  applied: number;
+  duplicates: number;
+  rejected: number;
+  results: OfflineGateActionResult[];
+}
+
 export interface Policy {
   id: string;
   property_id: string;

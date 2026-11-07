@@ -1,75 +1,109 @@
 <div align="center">
 
-# P A R K V A N T A
-
-### Smart Access. Smarter Parking.
-
-**Visitor verification, residential parking allocation and smart gate operations for gated communities.**
-
-Every approved visit resolves to exactly one authorized parking slot, and every occupied slot has a
-traceable lifecycle — enforced by PostgreSQL, not by a UI check.
+<img src="docs/assets/hero.png" alt="ParkVanta — Smart Access. Smarter Parking." width="100%" />
 
 <br />
 
-![Status](https://img.shields.io/badge/status-MVP%20%C2%B7%20pilot--ready%20core-101B2D?style=for-the-badge)
-![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-16A394?style=for-the-badge)
-![Frontend](https://img.shields.io/badge/surface-React%20%C2%B7%20TypeScript-101B2D?style=for-the-badge)
-![Tests](https://img.shields.io/badge/tests-21%20backend%20%C2%B7%205%20frontend%20%C2%B7%201%20e2e-16A394?style=for-the-badge)
-![AI](https://img.shields.io/badge/vision-designed%20%C2%B7%20not%20deployed-101B2D?style=for-the-badge)
+![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
+![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
+![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-28%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
+
+**Visitor verification · residential parking allocation · smart gate operations**
+
+[Architecture](#architecture) · [Measured results](#measured-not-marketed) · [Screens](#product-surfaces) · [Quickstart](#quickstart) · [License](#license--ownership)
 
 </div>
 
 ---
 
-> **Current state — verified.** The visitor → approval → QR → parking → entry → exit flow runs end to end against
-> PostgreSQL, with concurrency tests proving that a single-use pass cannot authorize twice and two vehicles cannot
-> claim one slot. Deferred work is listed explicitly in [Known limitations](#known-limitations) — nothing in this
-> README is described as shipped until it is covered by a passing test or a running endpoint.
+> **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
+> approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
+> The repository contains **28 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> offline network transition, and a recorded **20-concurrent-client** load run. Deferred work is listed in
+> [Known limitations](#known-limitations); nothing here is labelled live unless a test or endpoint proves it.
 
 ---
 
-## The problem
+## The gate is a ledger, not a log
 
 A residential gate is a queue of unverifiable claims. A guard writes a name in a register. A cab takes a guest bay.
 A delivery bike sits in a resident's space. Nobody knows how many visitor bays were free at 7:40 pm, who authorized
 the white sedan inside V-14, or whether the vehicle that entered is the one that was invited.
 
-Most visitor-management tools stop at *approval*. ParkVanta treats **parking as the product**: allocation,
-occupancy and release are transactional domain operations.
+Most visitor tools stop at *approval*. ParkVanta treats **parking as the product**:
 
-## What ships today
+- every approved visit resolves to **exactly one bay**, claimed inside a database transaction;
+- a reserved bay is **not** occupied until a guard confirms physical entry;
+- a single-use pass cannot authorize twice, even under simultaneous scans;
+- an exit releases the occupancy and the bay in one atomic transition;
+- every decision — including manual overrides — is attributable and auditable.
 
-| Capability | State | Evidence |
+<div align="center">
+
+| Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Multi-tenant auth (Argon2id, JWT, rotating refresh, replay revocation) | Live | `tests/test_auth.py` |
-| Roles: super admin, society admin, property manager, guard, resident | Live | Backend dependencies + service checks |
-| Society → property → tower → apartment → resident hierarchy | Live | Models + migrations + admin APIs |
-| Visitor invitations with vehicle binding and visit window | Live | End-to-end test |
-| Single-use QR pass, hash-only storage, revocation, expiry | Live | Visa race test |
-| Transactional parking allocation with `SKIP LOCKED` | Live | Concurrent allocation test |
-| Slot lifecycle: available → reserved → occupied → available | Live | Lifecycle test |
-| Gate console: verify, authorize, confirm entry/exit | Live | Lifecycle test |
-| Manual override with mandatory reason + audit | Live | Test + audit assertion |
-| Database-backed analytics and overstay detection | Live | `/analytics/*` endpoints |
-| Expiry/overstay sweep worker | Live | `python -m app.workers.expiry` |
-| Responsive PWA: resident, guard, visitor pass, admin | Live | Production build passing |
-| Realtime SSE (approvals, gate, parking) | Live | Stream tickets + Redis pub/sub; `tests/test_realtime.py` |
-| Admin inventory CRUD: properties, towers, units, zones, slots, policy | Live | `/admin/inventory` |
-| Browser E2E of the full visitor lifecycle | Live | `apps/web/e2e/visitor-flow.spec.ts` |
-| Email / SMS / WhatsApp delivery | Not configured | In-app notifications only |
-| Number-plate AI, occupancy vision | Designed only | `docs/AI_DESIGN.md` |
+| Backend verification | **28 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
+| Frontend verification | **5 passed** | `vitest run` |
+| Browser lifecycle | **1 passed** | Playwright · real Chrome |
+| Load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
+| Read latency | **p50 90.66 ms · p95 168.51 ms · p99 236.39 ms** | 20 concurrent clients · 20.06 s |
+| Load errors | **0 / 3,912** | all HTTP 200 |
+| API surface | **53 paths · 62 operations** | FastAPI OpenAPI introspection |
+| Data model | **23 tables · 2 migrations** | SQLAlchemy metadata |
+| Client bundle | **264.8 kB gzip JS · 6.84 kB gzip CSS** | production Vite build |
+
+</div>
+
+---
 
 ## Product surfaces
 
-| Surface | User | What it does |
-| :--- | :--- | :--- |
-| **Resident portal** | Apartment owner / tenant | Invite a visitor, bind a vehicle, approve, see the assigned bay, open/copy the QR pass |
-| **Gate console** | Security guard | Camera or paste scan, explicit verdict, authorize, confirm entry, release on exit, audited override |
-| **Visitor pass** | The visitor, no account | Opens from a link: live QR, slot, directions, validity window |
-| **Operations console** | Society admin / manager | Capacity, utilisation, live owners, reservations, overstays, gate trail |
-| **Vision service** | Optional AI layer | Designed for ANPR and occupancy inference; advisory only |
+<img src="docs/assets/screenshot-admin.png" alt="ParkVanta operations console showing capacity, utilisation, parking map and gate activity" width="100%" />
 
-The visitor never installs an app. The guard never types more than a plate. The QR contains no personal data.
+<p align="center"><em>Operations console — seeded Skyline Residency, 17 bays, one confirmed visitor, live telemetry.</em></p>
+
+<table>
+<tr>
+<td width="50%">
+<img src="docs/assets/screenshot-guard.png" alt="Guard console with pass verification and active vehicle" />
+<p align="center"><em>Gate console — verified pass, explicit authorization, one vehicle inside.</em></p>
+</td>
+<td width="50%">
+<img src="docs/assets/screenshot-resident.png" alt="Resident dashboard with invitation form and visitor history" />
+<p align="center"><em>Resident control — invitation states, assigned bay, active passes.</em></p>
+</td>
+</tr>
+<tr>
+<td width="50%">
+<img src="docs/assets/screenshot-inventory.png" alt="Inventory management for towers, apartments, zones, slots and policy" />
+<p align="center"><em>Inventory — physical structure, bays and the policy the allocator enforces.</em></p>
+</td>
+<td width="50%">
+<img src="docs/assets/screenshot-pass.png" alt="Visitor pass with QR code, bay and validity window" width="100%" />
+<p align="center"><em>Visitor pass — no account, no app, no PII inside the QR.</em></p>
+</td>
+</tr>
+</table>
+
+---
+
+## Design theories
+
+ParkVanta is opinionated. These are the six theories the implementation is built on, and the mechanism that makes
+each one testable.
+
+| # | Theory | Mechanism | Evidence |
+| :-: | :--- | :--- | :--- |
+| 1 | **Parking is a ledger, not a status field.** A bay has a lifecycle with legal transitions. | Reservation, occupancy and slot states are separate rows; every transition is one transaction. | Lifecycle test asserts `AVAILABLE → RESERVED → OCCUPIED → AVAILABLE`. |
+| 2 | **A pass is a capability, not an identifier.** Possession authorizes one entry, once. | 256-bit CSPRNG token, SHA-256 hash at rest, conditional consumption `WHERE status='ACTIVE'`. | Two simultaneous authorizations → exactly one success, one `already_used`. |
+| 3 | **Authorization is not actuation.** Opening a barrier, granting entry and recording occupancy are distinct events. | `verify → authorize → confirm entry`, each with its own audit row. | Gate test asserts separate `AUTHORIZED` and `CONFIRMED` events. |
+| 4 | **Offline trust is asymmetric.** A disconnected gate may close a lifecycle, never open one. | Exits and audited overrides queue locally; entry confirmation requires a prior online authorization. | Offline reconcile rejects un-authorized entry with `authorization_required`. |
+| 5 | **Realtime is a hint; PostgreSQL is truth.** A dropped event must never mean a dropped fact. | SSE carries ids and slot codes only; clients invalidate and refetch REST; bounded Stream replay. | SSE tests prove replay + publication; UI polls when disconnected. |
+| 6 | **Concurrency safety belongs in the schema.** Application checks are advisory; constraints are final. | `FOR UPDATE … SKIP LOCKED`, partial unique indexes on active reservation/occupancy per slot. | Two threads, one free bay → exactly one reservation, one `no_slot_available`. |
+
+If a theory cannot be expressed as a constraint, a test, or a measurable number, it stays out of the product.
 
 ---
 
@@ -80,11 +114,11 @@ microservices.
 
 ```mermaid
 flowchart LR
-    subgraph Client["React · TypeScript · Vite PWA"]
+    subgraph Client["React 19 · TypeScript · Vite PWA"]
         R["Resident"]
-        G["Gate console"]
+        G["Gate console + offline queue"]
         V["Visitor pass"]
-        A["Operations"]
+        A["Operations + inventory"]
     end
 
     subgraph API["FastAPI · /api/v1"]
@@ -93,27 +127,31 @@ flowchart LR
         QRE["QR engine"]
         PARK["parking engine"]
         GATE["gate operations"]
+        OFF["offline reconciliation"]
         AN["analytics"]
+        EV["SSE gateway · replay"]
     end
 
     PG[("PostgreSQL 16 · authority")]
-    RD[("Redis · rate limits")]
-    W["expiry worker"]
+    RD[("Redis 7 · limits · pub/sub · Streams")]
+    W["expiry / overstay worker"]
     VIS["vision service · optional"]
 
-    Client -->|HTTPS| API
+    Client -->|HTTPS + ticket| API
     API --> PG
     API -.-> RD
+    EV -.-> RD
     W --> PG
     GATE -.->|advisory| VIS
 ```
 
 **Invariants live in the database**
 
-- `FOR UPDATE OF parking_slots SKIP LOCKED` when claiming the next compatible slot.
+- `FOR UPDATE OF parking_slots SKIP LOCKED` when claiming the next compatible bay.
 - Partial unique indexes: one active reservation per slot, one active occupancy per slot.
-- Conditional update for pass consumption: `WHERE status = 'ACTIVE'`.
-- Every multi-table transition is a single transaction; a failed allocation rolls the approval back.
+- Conditional pass consumption: `UPDATE … SET status='CONSUMED' WHERE status='ACTIVE'`.
+- Offline idempotency: unique `(property_id, client_event_id)` on the reconciliation ledger.
+- Every multi-table transition is one transaction; a failed allocation rolls the approval back.
 
 ### Parking state machine
 
@@ -131,7 +169,7 @@ stateDiagram-v2
     MAINTENANCE --> AVAILABLE
 ```
 
-A reserved slot is **not** occupied. Only a guard-confirmed entry flips that state.
+A reserved bay is **not** occupied. Only a guard-confirmed entry flips that state.
 
 ### Entry decision — evaluated server-side, in order
 
@@ -150,6 +188,87 @@ A reserved slot is **not** occupied. Only a guard-confirmed entry flips that sta
 A verified QR is not a granted entry. Authorization, physical gate opening and occupancy confirmation are three
 separate events, all audited.
 
+### Realtime with replay
+
+`EventSource` cannot send an `Authorization` header, so a client exchanges its bearer token for a **2-minute,
+property-scoped stream ticket**. Frames are written to a bounded Redis Stream (500 frames per property) and read
+with `XREAD`, so a reconnect with `Last-Event-ID` (or `?last_event_id=`) receives the frames it missed.
+
+Events are advisory. Receipt triggers a REST refetch; if Redis or the stream is unavailable, polling still
+converges on PostgreSQL. Event ids, types and slot codes are sent — never visitor PII.
+
+### Offline trust boundary
+
+The guard console caches active visitors and queues gate actions in `localStorage` when connectivity drops.
+
+| Offline action | Behaviour | Server guarantee |
+| :--- | :--- | :--- |
+| Verify / authorize entry | **Blocked** until online | An offline device cannot authorize a pass |
+| Confirm entry | Allowed only if authorized online earlier | Server re-checks the `AUTHORIZED` event |
+| Confirm exit | Queued with timestamp + device id | Idempotent reconciliation releases once |
+| Manual override | Queued with mandatory reason | Recorded as `MANUAL_OVERRIDE` in the audit trail |
+
+Each queued action carries a client event id. Replaying the queue, a double click, or a network retry cannot apply
+an action twice. Device timestamps more than 5 minutes ahead, or older than 7 days, are rejected.
+
+---
+
+## Measured, not marketed
+
+A real authenticated HTTP load run against the seeded API on a local Docker PostgreSQL 16 instance.
+
+**Environment** — AMD Ryzen 7 8840HS · 16 threads · Linux x86_64 · Python 3.12.3 · PostgreSQL 16 (Docker) · Redis 7.
+**Command** — `make load-test` → `docs/benchmarks/local-20c.json`. **Recorded** — 2026-11-08.
+
+<img src="docs/assets/chart-latency.png" alt="Recorded latency percentiles: p50 90.66ms, p95 168.51ms, p99 236.39ms, max 321.93ms" width="100%" />
+
+<img src="docs/assets/chart-throughput.png" alt="Recorded throughput over 20 seconds at 195 requests per second with zero errors" width="100%" />
+
+| Metric | Result |
+| :--- | ---: |
+| Concurrency / duration | 20 clients / 20.06 s |
+| Requests / throughput | 3,912 / **195.06 req/s** |
+| Errors | **0** (0.000%) |
+| Mean latency | 102.18 ms |
+| p50 / p95 / p99 | **90.66 / 168.51 / 236.39 ms** |
+| Max observed | 321.93 ms |
+
+| Endpoint (weight) | Requests | p50 | p95 | p99 |
+| :--- | ---: | ---: | ---: | ---: |
+| `/parking/availability` (40%) | 1,578 | 81.48 ms | 117.04 ms | 198.61 ms |
+| `/analytics/overview` (30%) | 1,168 | 139.73 ms | 186.72 ms | 260.91 ms |
+| `/gate/active-visitors` (20%) | 751 | 81.58 ms | 118.55 ms | 194.17 ms |
+| `/gate/recent-activity` (10%) | 415 | 79.64 ms | 121.69 ms | 220.33 ms |
+
+This measures the **read path** on one host. It is a regression baseline, not a capacity guarantee for a pilot with
+different hardware, database size or write concurrency. The generator and raw JSON are in the repository so the
+number can be reproduced — and challenged.
+
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 28 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+
+---
+
+## How ParkVanta compares
+
+Legend: **●** first-class and enforced · **◐** partial / manual · **○** absent.
+
+| Dimension | Paper register | Generic visitor app | **ParkVanta** |
+| :--- | :---: | :---: | :---: |
+| Visitor authorization | ○ verbal | ● approval | **● single-use capability + resident approval** |
+| Vehicle binding | ○ | ◐ optional note | **● plate normalized and matched at gate** |
+| Parking allocation | ○ unmanaged | ◐ manual note | **● transactional bay reservation** |
+| Double-allocation prevention | ○ | ◐ application check | **● row locks + partial unique indexes** |
+| Entry vs occupancy | ○ conflated | ◐ one timestamp | **● authorized, confirmed and released are separate** |
+| Exit releases the bay | ○ | ◐ sometimes | **● atomic occupancy + slot release** |
+| Works during network loss | ● paper | ○ fails closed | **◐ exits/overrides queue; entry stays online-only** |
+| Realtime updates | ○ | ◐ polling | **● SSE + bounded replay, REST authoritative** |
+| Manual override traceability | ○ verbal | ◐ admin note | **● mandatory reason + audit event** |
+| Tenant isolation | ● physical | ◐ varies | **● org/property scope + 403 regression tests** |
+| AI dependency for entry | ○ | ○ | **● none; vision is optional and advisory** |
+
+The comparison is about enforced behaviour, not feature checklists. A tool can display a parking field without
+guaranteeing that two vehicles cannot claim the same bay; ParkVanta treats that guarantee as the product.
+
 ---
 
 ## Quickstart
@@ -160,8 +279,8 @@ cp .env.example .env
 
 docker compose up -d db redis     # PostgreSQL :55432 · Redis :56379
 make install                      # Python 3.12 venv + pinned deps
-make migrate                      # Alembic → 22 tables
-make seed                         # demo society, slots and accounts
+make migrate                      # Alembic → 23 tables
+make seed                         # demo society, 17 bays, accounts
 
 make api                          # API      → http://localhost:8080  (docs: /docs)
 make web-install && make web      # Frontend → http://localhost:5173
@@ -176,8 +295,8 @@ Seeded by `make seed`; password **`ParkVanta@2026`** (override with `SEED_PASSWO
 | Email | Role | What to try |
 | :--- | :--- | :--- |
 | `resident@skyline.dev` | Resident | Create and approve an invitation, open the QR pass |
-| `guard@skyline.dev` | Security guard | Scan/paste the pass, authorize, confirm entry, release on exit |
-| `admin@skyline.dev` | Society admin | Capacity, utilisation, overstays, gate trail |
+| `guard@skyline.dev` | Security guard | Verify, authorize, confirm entry, go offline, queue the exit |
+| `admin@skyline.dev` | Society admin | Capacity, utilisation, overstays, gate trail, inventory |
 | `manager@skyline.dev` | Property manager | Same operations scope |
 | `superadmin@parkvanta.dev` | Platform owner | Organization-level access |
 
@@ -186,27 +305,37 @@ Seeded by `make seed`; password **`ParkVanta@2026`** (override with `SEED_PASSWO
 
 ---
 
-## Testing
+## Verification
 
 ```bash
-make test                       # 21 backend tests on real PostgreSQL
-cd apps/web && npm test         # 5 frontend unit tests
-cd apps/web && npm run test:e2e # 1 Playwright lifecycle test (fresh E2E DB)
-cd apps/web && npm run build    # type-check + production bundle
+make test                         # 28 backend tests on real PostgreSQL
+cd apps/web && npm test           # 5 frontend unit tests
+cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
+cd apps/web && npm run build      # type-check + production bundle
+make load-test                    # reproducible read-path benchmark
 ```
 
-The backend suite runs against PostgreSQL (not SQLite) so locking and partial indexes behave exactly as in
-production. It covers the full acceptance flow, tenant isolation, refresh-token replay, vehicle mismatch, slot
-shortage, cancellation, manual override auditing — and two thread-barrier concurrency tests:
+| Suite | Command | Result |
+| :--- | :--- | ---: |
+| Backend | `pytest -q` | **28 passed** |
+| Frontend unit | `npm test` | **5 passed** |
+| Browser E2E | `npm run test:e2e` | **1 passed** |
+| Production build | `npm run build` | **passed** |
+| Load run | `make load-test` | **3,912 requests · 0 errors** |
 
-- two simultaneous authorizations of one pass → exactly one success, one `already_used`;
-- two simultaneous allocations with one free slot → exactly one reservation, one `no_slot_available`.
+What the backend suite proves:
 
-The realtime suite proves ticket scoping, SSE framing and Redis publication after approval. The Playwright test
-drives real Chrome through resident → visitor pass → guard authorization/entry/exit → admin overview against a
-freshly migrated and seeded `parkvanta_e2e` database.
+- complete visitor lifecycle, duplicate scan rejection, plate mismatch, cancellation, no-slot approval;
+- refresh-token rotation/replay revocation, suspended accounts, cross-tenant 403s;
+- manual override reason enforcement and audit rows;
+- two thread-barrier concurrency proofs: one authorization wins; one allocation wins;
+- SSE ticket scoping, `text/event-stream` framing, Redis Stream retention and replay from `last_event_id`;
+- offline exit reconciliation, duplicate replay, online-only entry confirmation, clock-skew rejection.
 
-See [`docs/TESTING.md`](docs/TESTING.md) for the full report and manual acceptance script.
+The Playwright scenario drives real Chrome through resident creation and approval → visitor QR → guard verify,
+authorize, confirm entry → **network loss** → queued exit → reconnect and reconciliation → admin overview.
+
+Raw verification snapshot: [`docs/results/verification.json`](docs/results/verification.json).
 
 ---
 
@@ -216,13 +345,13 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full report and manual acceptan
 | :--- | :--- |
 | Core API | Python 3.12 · FastAPI 0.162 · Pydantic 2.14 |
 | Data | PostgreSQL 16 · SQLAlchemy 2.1 · Alembic |
-| Cache / limits | Redis 7 (advisory only) |
+| Realtime / limits | Redis 7 · Streams, pub/sub, rate limits (advisory) |
 | Web | React 19 · TypeScript · Vite 6 · Tailwind CSS 4 |
 | Client data | TanStack Query · React Hook Form · Zod · Recharts |
 | Scanning | `html5-qrcode` camera + manual token fallback |
 | QR rendering | `qrcode` (client-side, URL payload, no PII) |
-| Infra | Docker · Docker Compose · Nginx · GitHub Actions |
-| Tests | Pytest · HTTPX · Vitest |
+| Infra | Docker · Compose · Nginx · GitHub Actions |
+| Verification | Pytest · HTTPX · Vitest · Playwright · custom load generator |
 | AI (designed) | OpenCV · YOLO · OCR · PyTorch, isolated service |
 
 ## Repository layout
@@ -231,29 +360,36 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full report and manual acceptan
 parkvanta/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/routers/      # auth · tenancy · invitations · qr · parking · gate · analytics
+│   │   ├── api/v1/routers/      # auth · tenancy · invitations · qr · parking · gate · events · analytics
 │   │   ├── core/                # settings · security · deps · errors · rate limit
 │   │   ├── database/            # engine · sessions · declarative base
-│   │   ├── models/              # 22-table domain model
+│   │   ├── models/              # 23-table domain model
 │   │   ├── schemas/             # request/response contracts
-│   │   ├── services/            # auth · qr · parking · invitations · gate · analytics
+│   │   ├── services/            # auth · qr · parking · invitations · gate · offline · events
 │   │   ├── workers/             # expiry / overstay sweep
 │   │   ├── seed.py
 │   │   └── main.py
 │   ├── migrations/              # reviewed Alembic revisions
 │   └── tests/
-├── apps/web/                    # React PWA (resident · guard · visitor · admin)
-├── docs/                        # PRD · SRS · architecture · database · API · security · AI · testing · deployment
+├── apps/web/                    # React PWA + Playwright suite
+│   └── e2e/                     # visitor lifecycle incl. offline transition
+├── docs/
+│   ├── assets/                  # captured screenshots, hero, result charts
+│   ├── benchmarks/              # raw load-test JSON
+│   ├── results/                 # verification snapshot
+│   └── ...                      # PRD · SRS · architecture · database · API · security · AI · testing · deployment
+├── scripts/                     # E2E API bootstrap · benchmark · asset capture
 ├── infrastructure/nginx/        # reference reverse proxy
 ├── .github/workflows/ci.yml     # backend + frontend + Playwright E2E
 ├── docker-compose.yml
 ├── Makefile
+├── LICENSE
 └── .env.example
 ```
 
 ## API surface
 
-REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs`.
+REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **53 paths, 62 operations**.
 
 | Group | Representative endpoints |
 | :--- | :--- |
@@ -263,9 +399,9 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs`.
 | QR | `POST /qr/verify` · `POST /qr/revoke` · `GET /qr/pass/{token}` (public) |
 | Parking | `GET /parking/availability` · `POST /parking/allocate` · `/parking/occupancies/{id}/release` |
 | Gate | `POST /gate/entry/authorize` · `/entry/confirm` · `/exit/confirm` · `/manual-override` |
+| Offline | `POST /gate/offline/reconcile` — idempotent batch, per-action results |
+| Realtime | `POST /events/ticket` · `GET /events/stream?ticket=&last_event_id=` |
 | Analytics | `GET /analytics/overview` · `/parking-utilization` · `/visitor-trends` · `/overstays` |
-
-Full contracts: [`docs/API_SPECIFICATION.md`](docs/API_SPECIFICATION.md).
 
 ## Security model
 
@@ -275,6 +411,8 @@ Full contracts: [`docs/API_SPECIFICATION.md`](docs/API_SPECIFICATION.md).
 - Tenant isolation on every query, with regression tests for cross-organization access.
 - Login and refresh rate limiting (Redis-backed, per-process fallback).
 - Audit trail for approval, verification, entry, exit, overrides, slot and policy changes.
+- Stream tickets are 2-minute, property-scoped JWTs; the access token never appears in a stream URL.
+- Offline entry is denied without a prior online authorization; replay is blocked by a unique ledger key.
 - No PII in QR payloads; visitor-safe pass projection; no facial recognition.
 - The application refuses to boot in production with the default development JWT secret.
 
@@ -284,36 +422,25 @@ Full contracts: [`docs/API_SPECIFICATION.md`](docs/API_SPECIFICATION.md).
 
 | Limitation | Impact | Next step |
 | :--- | :--- | :--- |
-| No offline gate queue | Gate requires connectivity | Signed offline credentials + reconciliation |
-| No email/SMS/WhatsApp provider | Pass links are copied/shared by the resident | Add a notification adapter with retry/status |
+| Load test covers reads only | Write saturation and allocation storms are unmeasured | Mixed write benchmark with contended bays |
+| SSE replay retains 500 frames per property | A very long disconnect can miss older frames | Redis Stream consumer groups / durable archive |
+| Offline queue lives in browser storage | Clearing site data drops unsynced exits | IndexedDB + service worker background sync |
 | Access token in `localStorage` | Larger XSS blast radius | In-memory token + strict CSP |
+| No email/SMS/WhatsApp provider | Pass links are copied/shared by the resident | Notification adapter with retry/status |
 | Registration requires property/apartment IDs | No public onboarding wizard | Society invite codes + discovery endpoint |
-| SSE has no replay window | Events during a disconnect are missed until the next poll/refetch | `Last-Event-ID` replay over Redis Streams |
-| No load/soak test | Capacity at pilot scale is unmeasured | k6 gate with a 50-concurrent-gate target |
+| No dependency CVE gate in CI | Vulnerabilities are not build-blocking | `pip-audit` + `npm audit` gate |
 | Vision AI not deployed | No ANPR/occupancy inference | Stage 13 with measured accuracy |
 
 ## Roadmap
 
-- [x] **0** Environment audit and baseline
-- [x] **1** Specification suite (PRD, SRS, architecture, database, API, security, AI, testing, deployment)
-- [x] **2** Monorepo scaffold, pinned toolchain
-- [x] **3** PostgreSQL schema, reviewed migrations, Docker Compose
-- [x] **4** Backend foundation: config, sessions, errors, logging, health
-- [x] **5** Auth, RBAC and tenant isolation
-- [x] **6** Society, property, resident and guard APIs
-- [x] **7** Invitations and approval workflow
-- [x] **8** Cryptographic QR engine with concurrent-scan test
-- [x] **9** Concurrency-safe parking allocation engine
-- [x] **10** Gate operations and audited manual override
-- [x] **11** Resident, guard, visitor and admin interfaces
-- [x] **12** In-app notifications, polling fallback and SSE push
-- [x] **13** Analytics, overstays and expiry worker
-- [x] **14** Realtime SSE gateway with Redis fan-out and signed stream tickets
-- [ ] **15** Controlled offline gate mode
-- [ ] **16** ParkVanta Vision (ANPR + occupancy) with evaluation protocol
-- [x] **17a** Playwright E2E of the visitor lifecycle
-- [ ] **17b** Load/soak tests and dependency CVE gate
-- [ ] **18** Pilot at one property and production hardening
+- [x] **0–14** Domain model, auth, RBAC, QR engine, parking engine, gate operations, realtime SSE with replay
+- [x] **15** Controlled offline gate mode: queued exits/overrides, idempotent reconciliation, online-only entry
+- [x] **16** Admin inventory, policy and property onboarding screens
+- [x] **17a** Playwright E2E including a network-loss transition
+- [x] **17b** Reproducible load harness with recorded results
+- [ ] **17c** Dependency CVE gate and mixed write-path benchmark
+- [ ] **18** ParkVanta Vision (ANPR + occupancy) with an evaluation protocol
+- [ ] **19** Pilot at one property and production hardening
 
 ## Documentation
 
@@ -324,18 +451,28 @@ Full contracts: [`docs/API_SPECIFICATION.md`](docs/API_SPECIFICATION.md).
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Boundaries, flows, state machines, trade-offs |
 | [`docs/DATABASE_DESIGN.md`](docs/DATABASE_DESIGN.md) | ER model, invariants, allocation query, retention |
 | [`docs/API_SPECIFICATION.md`](docs/API_SPECIFICATION.md) | Endpoints, roles, errors, examples |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, RBAC matrix, QR and privacy controls |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, RBAC matrix, QR, offline and privacy controls |
 | [`docs/AI_DESIGN.md`](docs/AI_DESIGN.md) | Vision pipeline, confidence policy, evaluation |
-| [`docs/TESTING.md`](docs/TESTING.md) | Test report and manual acceptance script |
+| [`docs/TESTING.md`](docs/TESTING.md) | Test report, benchmark, manual acceptance script |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Environments, release, backups, monitoring |
 | [`docs/DECISIONS/`](docs/DECISIONS) | Architecture decision records |
 
 ---
 
+## License & ownership
+
+**ParkVanta is proprietary software.** All rights, title and interest belong exclusively to the **ParkVanta Team**.
+
+No permission is granted to copy, modify, distribute, sublicense, host or create derivative works from this
+software without prior written permission. Access to this repository does not transfer any right. See
+[`LICENSE`](LICENSE) for the full terms.
+
 <div align="center">
 
 **PARKVANTA** · *Smart Access. Smarter Parking.*
 
-Designed and engineered by **Arghya Bose**
+© 2026 ParkVanta Team. All rights reserved.
+
+Engineered by **Arghya Bose**
 
 </div>

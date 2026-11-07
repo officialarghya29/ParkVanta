@@ -81,6 +81,7 @@ Authentication: `Authorization: Bearer <access_token>`. The refresh token is set
 | POST | `/gate/entry/confirm` | Creates occupancy, slot → `OCCUPIED` |
 | POST | `/gate/exit/confirm` | Releases occupancy and slot; 409 if already exited |
 | POST | `/gate/manual-override` | Reason ≥ 10 chars, audited |
+| POST | `/gate/offline/reconcile` | Idempotent batch of queued exits/overrides/authorized entry confirmations |
 | GET | `/gate/active-visitors` | Vehicles currently inside |
 | GET | `/gate/recent-activity` | Last gate decisions |
 
@@ -93,13 +94,17 @@ reconnect; the database remains authoritative.
 | Method | Path | Roles | Notes |
 | :--- | :--- | :--- | :--- |
 | POST | `/events/ticket` | any scoped user | Body `{ "property_id": "<uuid>" }`; returns `{ ticket, expires_in }` (2 minutes) |
-| GET | `/events/stream?ticket=` | ticket holder | `text/event-stream`; `: connected` first, then named `event:` frames |
+| GET | `/events/stream?ticket=&last_event_id=` | ticket holder | `text/event-stream`; accepts `Last-Event-ID` header too |
 
 Event types: `invitation.created`, `invitation.approved`, `invitation.rejected`, `invitation.cancelled`,
 `gate.entry_authorized`, `gate.entry_confirmed`, `gate.exit_confirmed`, `gate.manual_override`,
 `gate.entry_denied`, `parking.updated`, `parking.overstay`. Frames carry `id`, `type`, `property_id`,
-`occurred_at` and a small `data` object (ids and slot codes, never visitor PII). Distribution uses Redis
-pub/sub channel `pv:events:<property_id>` with an in-process fallback when Redis is unavailable.
+`occurred_at` and a small `data` object (ids and slot codes, never visitor PII).
+
+Frames are appended to the Redis Stream `pv:stream:<property_id>` (bounded to 500 frames) and published on
+`pv:events:<property_id>`. The stream is read with `XREAD`; passing the last frame id replays retained frames
+in order before tailing live events. Without Redis the API falls back to a single-process live broker with no
+replay. Events remain advisory: clients refetch REST after receipt and after reconnect.
 
 ## Analytics
 
@@ -131,3 +136,6 @@ curl -s -X POST http://localhost:8080/api/v1/invitations \
 - `POST /gate/entry/confirm` returns the existing occupancy with `already_confirmed: true`.
 - `POST /gate/exit/confirm` is deliberately **not** idempotent: a second call returns `409 already_exited`
   so repeated barrier operations stay visible.
+- `POST /gate/offline/reconcile` is idempotent per `(property_id, client_event_id)`: a replay reports
+  `duplicate` and performs no second transition. A batch accepts 1–50 actions, each with `recorded_at`,
+  `device_id`, and a supported action (`ENTRY_CONFIRM`, `EXIT_CONFIRM`, `MANUAL_OVERRIDE`).

@@ -1,10 +1,11 @@
-.PHONY: help install dev api migrate seed test test-e2e load-test load-test-write build web-install lint audit pilot-backup
+.PHONY: help install dev api migrate seed bootstrap test test-e2e load-test load-test-write build web-install lint audit pilot-backup
 
 help:
 	@echo "ParkVanta"
 	@echo "  make install     Create .venv and install backend dependencies"
 	@echo "  make migrate     Apply Alembic migrations"
-	@echo "  make seed        Load the demo society and accounts"
+	@echo "  make seed        Load the demo society and accounts (development only)"
+	@echo "  make bootstrap   Provision the first real society + administrator"
 	@echo "  make api         Run the API at http://localhost:8080"
 	@echo "  make web         Run the web app at http://localhost:5173"
 	@echo "  make test        Run the backend test suite"
@@ -26,6 +27,9 @@ migrate:
 
 seed:
 	cd backend && ../.venv/bin/python -m app.seed
+
+bootstrap:
+	cd backend && ../.venv/bin/python -m app.bootstrap
 
 api:
 	cd backend && ../.venv/bin/uvicorn app.main:app --reload --port 8080

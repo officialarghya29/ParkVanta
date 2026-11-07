@@ -64,7 +64,8 @@ publicly reachable. The SPA and API share one origin so CORS stays narrow.
 | `JWT_SECRET` | `openssl rand -hex 48`; store in the secret manager |
 | `REDIS_URL` | Private Redis URL; no public port |
 | `CORS_ORIGINS` | Exactly the pilot HTTPS origin |
-| `SEED_PASSWORD` | Only for the one-time bootstrap; unique and rotated |
+| `APP_PUBLIC_URL` | The pilot HTTPS origin, used in password-reset links |
+| `SMTP_*` | Society mail relay; required for self-service password reset |
 | `VITE_API_BASE_URL` | `/api/v1` when served behind the same origin |
 
 The API refuses to start in production with the default development JWT secret.
@@ -73,10 +74,9 @@ The API refuses to start in production with the default development JWT secret.
 
 ## 4. Bootstrap and deploy
 
-> The repository currently ships the demo seed as the only bootstrap path. For a controlled pilot, run it once
-> against an **empty** database with a unique `SEED_PASSWORD`, then immediately rotate the shared password and
-> disable every demo account the society will not use. A dedicated first-admin bootstrap CLI is required before
-> onboarding real resident data; that gap is tracked in the README limitations.
+> Production uses `app.bootstrap`, not the demo seed. The bootstrapper creates one organization, one property,
+> its policy and the first society administrator. It refuses an existing slug or email and creates no demo
+> accounts. Keep `BOOTSTRAP_ADMIN_PASSWORD` in a root-only env file; it must contain letters and digits.
 
 ```bash
 # 1. Build immutable images from the release commit
@@ -91,9 +91,10 @@ export DATABASE_URL='postgresql+psycopg://…'
 export JWT_SECRET='<48-byte secret>'
 docker run --rm --env DATABASE_URL --env JWT_SECRET parkvanta-api:<sha> alembic upgrade head
 
-# 4. One-time pilot bootstrap (empty DB only)
-docker run --rm --env DATABASE_URL --env JWT_SECRET --env SEED_PASSWORD='<unique>' \
-  parkvanta-api:<sha> python -m app.seed
+# 4. One-time pilot bootstrap (empty DB only; values from /etc/parkvanta/bootstrap.env)
+docker run --rm --env-file /etc/parkvanta/bootstrap.env parkvanta-api:<sha> \
+  python -m app.bootstrap
+# Record the printed property join code. Residents use it at /register; an admin verifies them in Inventory.
 
 # 5. Start the API with two workers
 docker run -d --name parkvanta-api --env-file /etc/parkvanta/pilot.env \
@@ -117,6 +118,10 @@ curl -fsS -X POST https://pilot.example.com/api/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@…","password":"…"}' | head -c 300
 ```
+
+Then open **Inventory**, copy the society join code, register one test resident at `/register`, verify the account
+in **Resident accounts**, and confirm that resident can issue and approve one invitation. Send one password-reset
+email to a real mailbox before go-live.
 
 ---
 
@@ -265,5 +270,5 @@ release; destructive schema changes need a separate planned window.
 - **Conditional** — fix listed issues within two weeks, keep guards on the manual fallback for affected flows.
 - **Stop** — any double allocation, unexplained occupancy, or repeated authorization bypass.
 
-The pilot is not a production certification. Multi-property tenancy, notification delivery, first-admin bootstrap
-and the vision pipeline remain separate work.
+The pilot is not a production certification. Multi-property operations, outbound visitor notifications and the
+vision pipeline remain separate work.

@@ -23,9 +23,36 @@ Verify: `curl http://localhost:8080/health` and `curl http://localhost:8080/read
 | `ENVIRONMENT` | ✅ | `production` enables secret validation and secure cookies |
 | `REDIS_URL` | recommended | Rate limiting falls back to per-process state |
 | `CORS_ORIGINS` | ✅ | Comma-separated SPA origins |
-| `SEED_PASSWORD` | dev only | Demo account password |
+| `APP_PUBLIC_URL` | ✅ | Public SPA origin used in password-reset links |
+| `SMTP_HOST` | for reset | Mail relay host; leave empty only in development |
+| `SMTP_PORT` | for reset | Default `587`; use `465` with `SMTP_USE_SSL=true` |
+| `SMTP_FROM` | for reset | Sender address/display name |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | if required | Relay credentials, stored in the secret manager |
+| `SMTP_USE_TLS` / `SMTP_USE_SSL` | for reset | STARTTLS (587) or implicit TLS (465) |
+| `SEED_PASSWORD` | dev only | Demo account password; never used by `app.bootstrap` |
 
 Secrets belong in a managed secret store, never in the image or repository.
+
+### 2.1 First-run provisioning
+
+Run once against an empty database after migrations:
+
+```bash
+export BOOTSTRAP_ORG_NAME='Skyline Communities'
+export BOOTSTRAP_ORG_SLUG='skyline'
+export BOOTSTRAP_PROPERTY_NAME='Skyline Residency'
+export BOOTSTRAP_ADMIN_NAME='Ananya Rao'
+export BOOTSTRAP_ADMIN_EMAIL='admin@example.com'
+export BOOTSTRAP_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+cd backend && ../.venv/bin/python -m app.bootstrap
+```
+
+The command creates one organization, property, policy and society admin. It refuses an existing slug or email and
+prints the property join code. Do not use `app.seed` for a real installation.
+
+In the web app, the admin shares the join code, residents register at `/register`, and the admin verifies each
+account in **Inventory → Resident accounts** before the resident can issue invitations. Configure SMTP before
+go-live and send one real password-reset email as an acceptance check.
 
 ## 3. Production topology
 
@@ -46,9 +73,10 @@ build → Nginx). A reference reverse-proxy config is in `infrastructure/nginx/p
 1. Build and tag images from the release commit.
 2. Back up PostgreSQL (`pg_dump` or managed snapshot).
 3. Run migrations as a one-off job: `alembic upgrade head`.
-4. Deploy the API, then the web assets.
-5. Hit `/health` and `/ready`; confirm a login and one gate verification.
-6. Keep the previous image tag for rollback.
+4. On a fresh database, run `python -m app.bootstrap` once and record the join code.
+5. Deploy the API, then the web assets.
+6. Hit `/health` and `/ready`; confirm a login, one gate verification and one password-reset email.
+7. Keep the previous image tag for rollback.
 
 **Rollback:** redeploy the previous image tag. Schema changes must be backward compatible for one release;
 destructive migrations require a separate, planned step.

@@ -1,5 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Car, Check, Layers, Plus, Settings2 } from "lucide-react";
+import {
+  Building2,
+  Car,
+  Check,
+  Copy,
+  KeyRound,
+  Layers,
+  Plus,
+  RefreshCw,
+  Settings2,
+  UserCheck,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -19,9 +30,11 @@ import { api } from "../lib/api";
 import { titleCase } from "../lib/format";
 import type {
   Apartment,
+  JoinCode,
   Page,
   Policy,
   Property,
+  ResidentAccount,
   Slot,
   Tower,
   Zone,
@@ -40,6 +53,8 @@ const ZONE_CATEGORIES = [
 export function InventoryPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const canManage = ["SUPER_ADMIN", "SOCIETY_ADMIN", "PROPERTY_MANAGER"].includes(user?.role ?? "");
+  const [copied, setCopied] = useState(false);
   const properties = useQuery({
     queryKey: ["properties"],
     queryFn: () => api<Property[]>("/properties"),
@@ -80,6 +95,17 @@ export function InventoryPage() {
     queryKey: ["policy", propertyId],
     queryFn: () => api<Policy>(`/properties/${propertyId}/policy`),
     enabled: Boolean(propertyId),
+  });
+  const joinCode = useQuery({
+    queryKey: ["join-code", propertyId],
+    queryFn: () => api<JoinCode>(`/properties/${propertyId}/join-code`),
+    enabled: Boolean(propertyId) && canManage,
+  });
+  const residents = useQuery({
+    queryKey: ["residents", propertyId],
+    queryFn: () =>
+      api<Page<ResidentAccount>>(`/properties/${propertyId}/residents?limit=100`),
+    enabled: Boolean(propertyId) && canManage,
   });
 
   const invalidate = (key: string) =>
@@ -123,6 +149,19 @@ export function InventoryPage() {
       api<Policy>(`/properties/${propertyId}/policy`, { method: "PATCH", json: body }),
     onSuccess: () => invalidate("policy"),
   });
+  const rotateJoinCode = useMutation({
+    mutationFn: () =>
+      api<JoinCode>(`/properties/${propertyId}/join-code/rotate`, { method: "POST" }),
+    onSuccess: () => invalidate("join-code"),
+  });
+  const updateResident = useMutation({
+    mutationFn: ({ userId, isVerified }: { userId: string; isVerified: boolean }) =>
+      api<ResidentAccount>(`/residents/${userId}`, {
+        method: "PATCH",
+        json: { is_verified: isVerified },
+      }),
+    onSuccess: () => invalidate("residents"),
+  });
 
   const canCreateProperty =
     user?.role === "SUPER_ADMIN" || user?.role === "SOCIETY_ADMIN";
@@ -155,7 +194,9 @@ export function InventoryPage() {
     createZone.error ??
     createSlot.error ??
     updateSlot.error ??
-    updatePolicy.error;
+    updatePolicy.error ??
+    rotateJoinCode.error ??
+    updateResident.error;
 
   if (!propertyId) {
     return (
@@ -204,6 +245,105 @@ export function InventoryPage() {
       </div>
 
       {error ? <ErrorNote message={(error as Error).message} /> : null}
+
+      {canManage ? (
+        <Card className="flex flex-wrap items-center justify-between gap-4 p-5">
+          <div>
+            <p className="font-mono text-[10px] tracking-[0.2em] text-teal-bright uppercase">
+              Resident onboarding
+            </p>
+            <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
+              <KeyRound className="h-4 w-4 text-teal/70" /> Society join code
+            </h2>
+            <p className="mt-1 max-w-xl text-sm text-slate-400">
+              Share this code only with residents. It lets them select an apartment and create an
+              account at <span className="font-mono text-xs text-slate-300">/register</span>.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="rounded-xl border border-teal/30 bg-teal/5 px-4 py-2.5 font-mono text-sm tracking-[0.12em] text-teal-bright">
+              {joinCode.data?.join_code ?? "Loading…"}
+            </code>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!joinCode.data}
+              onClick={() => {
+                if (!joinCode.data) return;
+                void navigator.clipboard.writeText(joinCode.data.join_code);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1500);
+              }}
+            >
+              <Copy className="h-4 w-4" /> {copied ? "Copied" : "Copy"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={rotateJoinCode.isPending}
+              onClick={() => rotateJoinCode.mutate()}
+            >
+              <RefreshCw className="h-4 w-4" /> Rotate
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
+      {canManage ? (
+        <Card className="p-6">
+          <SectionTitle
+            title="Resident accounts"
+            caption="Verify a self-registered resident before they can issue visitor invitations"
+            action={<UserCheck className="h-4 w-4 text-teal/70" />}
+          />
+          {residents.isLoading ? <Spinner label="Loading residents" /> : null}
+          <div className="mt-4 divide-y divide-white/[0.06]">
+            {residents.data?.items.map((resident) => {
+              const apartment = apartments.data?.items.find(
+                (item) => item.id === resident.apartment_id,
+              );
+              return (
+                <div
+                  key={resident.user.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-100">{resident.user.full_name}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {resident.user.email} · {apartment ? apartment.number : "Apartment unavailable"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge tone={resident.is_verified ? "teal" : "amber"}>
+                      {resident.is_verified ? "Verified" : "Pending"}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant={resident.is_verified ? "ghost" : "secondary"}
+                      className="px-3 py-1.5 text-xs"
+                      disabled={updateResident.isPending}
+                      onClick={() =>
+                        updateResident.mutate({
+                          userId: resident.user.id,
+                          isVerified: !resident.is_verified,
+                        })
+                      }
+                    >
+                      {resident.is_verified ? "Suspend" : "Verify"}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {!residents.isLoading && residents.data?.items.length === 0 ? (
+            <EmptyState
+              title="No resident accounts yet"
+              body="Share the join code above so residents can register."
+            />
+          ) : null}
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="p-6">

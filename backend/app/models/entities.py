@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from datetime import datetime
 
@@ -42,6 +43,11 @@ class Organization(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+def generate_join_code() -> str:
+    """A high-entropy, human-shareable code that scopes resident self-registration."""
+    return secrets.token_hex(8).upper()
+
+
 class Property(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "properties"
 
@@ -49,6 +55,9 @@ class Property(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    join_code: Mapped[str] = mapped_column(
+        String(16), nullable=False, unique=True, index=True, default=generate_join_code
+    )
     address_line: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     city: Mapped[str] = mapped_column(String(80), nullable=False, default="")
     state: Mapped[str] = mapped_column(String(80), nullable=False, default="")
@@ -410,6 +419,7 @@ class Notification(UUIDPrimaryKeyMixin, Base):
         String(20), nullable=False, default=NotificationStatus.PENDING.value
     )
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

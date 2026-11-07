@@ -56,4 +56,9 @@ class NotificationOut(ORMModel):
     body: str
     channel: str
     status: str
+    read_at: datetime | None
     created_at: datetime
+
+
+class UnreadCountOut(BaseModel):
+    count: int

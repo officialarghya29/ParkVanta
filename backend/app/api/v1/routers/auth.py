@@ -26,6 +26,7 @@ from app.services import auth_service
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 login_limiter = SlidingWindowRateLimiter(settings.login_rate_limit, settings.login_rate_window_seconds)
 refresh_limiter = SlidingWindowRateLimiter(30, 60)
+forgot_limiter = SlidingWindowRateLimiter(5, 300)
 
 COOKIE_NAME = "parkvanta_refresh"
 COOKIE_PATH = "/api/v1/auth"
@@ -119,8 +120,14 @@ def create_account(
 
 
 @router.post("/forgot-password", response_model=Message, status_code=status.HTTP_202_ACCEPTED)
-def forgot_password(payload: ForgotPasswordRequest, db: Annotated[Session, Depends(get_db)]) -> Message:
-    auth_service.request_password_reset(db, payload.email)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> Message:
+    email = auth_service.normalize_email(payload.email)
+    forgot_limiter.hit(SlidingWindowRateLimiter.key_for("forgot", email, client_ip(request)))
+    auth_service.request_password_reset(db, email)
     return Message(message="If an account exists for this email, a reset link has been issued")
 
 

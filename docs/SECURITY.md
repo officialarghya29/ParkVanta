@@ -9,6 +9,7 @@
 | Offline queue | Replay / forged entry | Online-only authorization, unique client-event ledger, clock checks |
 | Tenant data | Cross-society reads | Query scoping + service assertions + regression tests |
 | Accounts | Credential stuffing | Argon2id, login rate limits, generic failure messages |
+| Onboarding | Outsider joins a society | 64-bit join code, admin-only retrieval/rotation, admin verification |
 | Sessions | Refresh token theft | Rotation, family revocation on replay, httpOnly cookie |
 | Gate decisions | Unlogged overrides | Mandatory reason, immutable event + audit row |
 | PII | Over-collection | No PII in QR, visitor-safe projection, no contact data in analytics |
@@ -25,7 +26,11 @@ Explicitly out of scope: facial recognition and any biometric processing.
   rotated token revokes every active session for that user (replay detection).
 - **Cookies:** refresh cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` in production.
 - **Password reset:** 30-minute hashed token, single use; successful reset revokes all refresh tokens. Responses
-  never reveal whether an email exists.
+  never reveal whether an email exists. The link is delivered through the configured SMTP relay; in production a
+  missing or failing relay returns 503 instead of silently logging the token. Development logs the link only when
+  SMTP is unconfigured.
+- **First admin:** `python -m app.bootstrap` creates one organization, property, policy and society admin. It
+  refuses an existing slug or email and never creates demo accounts.
 
 ## 3. Authorization matrix
 
@@ -56,6 +61,15 @@ Roles are enforced in FastAPI dependencies and again in services. Hiding a butto
 5. Revocation is immediate and server-side; cancellation also releases the slot.
 6. The QR encodes a URL containing the token, never visitor details.
 
+## 4.1 Society join codes
+
+- A property join code is 16 hexadecimal characters (64 bits) generated with `secrets.token_hex(8)`.
+- Only society admins and property managers can read or rotate it.
+- The public lookup returns the property name/address and apartment labels needed to register; it never returns
+  residents, contact details, occupancy or parking inventory.
+- Registration still requires an explicit apartment id from that lookup; the account starts `is_verified=False`.
+- Rotating the code immediately invalidates the previous value.
+
 ## 5. Tenant isolation
 
 - All queries filter `organization_id`; operational tables also filter `property_id`.
@@ -65,9 +79,9 @@ Roles are enforced in FastAPI dependencies and again in services. Hiding a butto
 
 ## 6. Auditing
 
-Recorded actions include: registration, login success/failure, refresh replay, account creation, invitation
-create/approve/reject/cancel, pass revocation, entry authorization, entry confirm, exit, manual override,
-slot changes and policy changes. Audit rows include organization, actor, entity, IP where available, and JSON
+Recorded actions include: bootstrap, registration, login success/failure, refresh replay, account creation,
+join-code rotation, invitation create/approve/reject/cancel, pass revocation, entry authorization, entry confirm,
+exit, manual override, slot changes and policy changes. Audit rows include organization, actor, entity, IP where available, and JSON
 metadata, and are written in the same transaction as the operation.
 
 ## 6.1 Offline gate actions
@@ -125,4 +139,5 @@ metadata, and are written in the same transaction as the operation.
 - Access tokens are stored in `localStorage` for SPA convenience; a strict CSP and short TTL mitigate, but
   in-memory-only storage is the next hardening step.
 - Rate limiting falls back to per-process state if Redis is unavailable.
-- Email/SMS delivery is not configured; reset tokens are logged only in non-production environments.
+- Visitor notifications are in-app only. Password reset requires a configured SMTP relay; production fails closed
+  with 503 when delivery is unavailable.

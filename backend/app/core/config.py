@@ -1,15 +1,19 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_DEV_SECRET = "dev-only-insecure-jwt-secret-change-before-deploying"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables and `.env`."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(PROJECT_ROOT / ".env", ".env"), env_file_encoding="utf-8", extra="ignore"
+    )
 
     app_name: str = "ParkVanta"
     environment: str = "development"
@@ -39,8 +43,14 @@ class Settings(BaseSettings):
     default_overstay_grace_minutes: int = 30
     reservation_ttl_minutes: int = 30
 
-    vision_service_url: str = ""
-    vision_enabled: bool = False
+    app_public_url: str = "http://localhost:5173"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "ParkVanta <no-reply@parkvanta.local>"
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
 
     @field_validator("jwt_secret")
     @classmethod
@@ -56,6 +66,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment.lower() in {"production", "prod", "staging"}
+
+    @property
+    def email_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_from)
 
     def validate_for_production(self) -> None:
         if self.is_production and self.jwt_secret == DEFAULT_DEV_SECRET:

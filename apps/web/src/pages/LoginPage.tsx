@@ -1,11 +1,12 @@
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { homeRouteFor, useAuth } from "../auth/AuthContext";
 import { Brand } from "../components/AppShell";
 import { Button, Card, ErrorNote, Field, Input } from "../components/ui";
 
+const DEMO_MODE = import.meta.env.DEV;
 const DEMO_PASSWORD = "ParkVanta@2026";
 const DEMO_ACCOUNTS = [
   { email: "resident@skyline.dev", label: "Resident", detail: "Invite and approve visitors" },
@@ -16,8 +17,8 @@ const DEMO_ACCOUNTS = [
 export function LoginPage() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("resident@skyline.dev");
-  const [password, setPassword] = useState(DEMO_PASSWORD);
+  const [email, setEmail] = useState(DEMO_MODE ? "resident@skyline.dev" : "");
+  const [password, setPassword] = useState(DEMO_MODE ? DEMO_PASSWORD : "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -115,30 +116,41 @@ export function LoginPage() {
             </form>
           </Card>
 
-          <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
-            <p className="font-mono text-[10px] tracking-[0.16em] text-slate-500 uppercase">
-              Demo society · password {DEMO_PASSWORD}
-            </p>
-            <div className="mt-3 grid gap-2">
-              {DEMO_ACCOUNTS.map((account) => (
-                <button
-                  key={account.email}
-                  type="button"
-                  onClick={() => {
-                    setEmail(account.email);
-                    setPassword(DEMO_PASSWORD);
-                  }}
-                  className="flex items-center justify-between rounded-xl border border-white/[0.06] px-3 py-2 text-left transition-colors hover:border-teal/40 hover:bg-white/[0.04]"
-                >
-                  <span>
-                    <span className="block text-sm text-slate-200">{account.label}</span>
-                    <span className="block text-[11px] text-slate-500">{account.detail}</span>
-                  </span>
-                  <span className="font-mono text-[10px] text-teal-bright">USE</span>
-                </button>
-              ))}
-            </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+            <Link to="/forgot-password" className="text-slate-400 transition-colors hover:text-white">
+              Forgot password?
+            </Link>
+            <Link to="/register" className="text-teal-bright transition-colors hover:text-white">
+              Create resident account
+            </Link>
           </div>
+
+          {DEMO_MODE ? (
+            <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
+              <p className="font-mono text-[10px] tracking-[0.16em] text-slate-500 uppercase">
+                Development seed · password {DEMO_PASSWORD}
+              </p>
+              <div className="mt-3 grid gap-2">
+                {DEMO_ACCOUNTS.map((account) => (
+                  <button
+                    key={account.email}
+                    type="button"
+                    onClick={() => {
+                      setEmail(account.email);
+                      setPassword(DEMO_PASSWORD);
+                    }}
+                    className="flex items-center justify-between rounded-xl border border-white/[0.06] px-3 py-2 text-left transition-colors hover:border-teal/40 hover:bg-white/[0.04]"
+                  >
+                    <span>
+                      <span className="block text-sm text-slate-200">{account.label}</span>
+                      <span className="block text-[11px] text-slate-500">{account.detail}</span>
+                    </span>
+                    <span className="font-mono text-[10px] text-teal-bright">USE</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

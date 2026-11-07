@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { homeRouteFor, useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
+import { NotificationCenter } from "./NotificationCenter";
 
 const NAV = [
   { to: "/resident", label: "Resident", icon: Car, roles: ["RESIDENT"] },
@@ -77,6 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="flex items-center gap-3">
+            <NotificationCenter />
             <span className="hidden items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-teal-bright uppercase sm:flex">
               <span className="h-1.5 w-1.5 rounded-full bg-teal-bright shadow-[0_0_10px_2px_rgba(46,230,200,0.6)]" />
               System live

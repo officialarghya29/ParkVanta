@@ -2,8 +2,9 @@
 
 ## 1. Shape
 
-A **modular monolith** with a future-facing, isolated inference service. One deployable API, one responsive web
-client, PostgreSQL as the authority, Redis for advisory state.
+A **modular monolith** with an isolated inference service reserved for the roadmap. One deployable API, one
+responsive web client, PostgreSQL as the authority, Redis for advisory state. No vision inference is deployed in
+this release.
 
 ```mermaid
 flowchart LR
@@ -23,13 +24,15 @@ flowchart LR
         OFF[offline reconciliation]
         EV[SSE gateway · replay]
         AN[analytics]
-        N[notifications]
+        N[notification inbox · read state]
+        ONB[public join-code onboarding]
+        MAIL[SMTP reset adapter]
     end
 
     PG[(PostgreSQL 16)]
     RD[(Redis · limits · Streams)]
     W[Expiry worker]
-    VIS[Vision service · optional]
+    VIS[Vision service · roadmap, not deployed]
 
     Client -->|HTTPS /api/v1| API
     API --> PG
@@ -121,7 +124,29 @@ allocation, offline reconciliation and expiry paths. A reconnect can pass `Last-
 the stream drops, polling intervals (15–20s, relaxed to 60s while connected) still converge on PostgreSQL.
 Stream tickets avoid putting the access token in a URL and expire after two minutes.
 
-### 3.5 Offline gate reconciliation
+### 3.5 Onboarding and account recovery
+
+```text
+first deployment
+  → python -m app.bootstrap
+      → organization + property + policy + first society admin (single transaction)
+      → refuses existing slug/email; prints the property join code
+resident
+  → GET /public/join/<code>       → property + apartment labels only
+  → POST /auth/register           → user + resident profile, is_verified=false
+admin
+  → GET /properties/<id>/join-code (admin only), rotate to invalidate the old code
+  → PATCH /residents/<id> {is_verified:true}
+password reset
+  → POST /auth/forgot-password    → hashed token, SMTP link if configured; generic response
+  → POST /auth/reset-password     → consume token, revoke every refresh session
+```
+
+In-app notifications are stored per user with an explicit `read_at`, so the bell and the API share one source of
+truth. Visitor SMS/email remains deliberately queued as roadmap work; the password-reset transport is a real
+SMTP adapter, not a log-only stub.
+
+### 3.6 Offline gate reconciliation
 
 ```text
 client loses network
@@ -178,4 +203,4 @@ Nginx / managed ingress (TLS)
 | SSE + polling fallback instead of WebSockets | Simpler failure model, replay via Streams; database stays authoritative |
 | Slot chosen at approval, not at arrival | Guarantees a destination; may hold a slot for a no-show until expiry |
 | Pass issued at approval | Removes the "awaiting approval" scan state; the resident must approve before a pass exists |
-| External notifications recorded as `SKIPPED` until a provider is configured | No fake delivery claims |
+| Visitor notifications remain in-app; password reset uses SMTP | No fake outbound visitor delivery; reset fails closed in production if SMTP is absent |

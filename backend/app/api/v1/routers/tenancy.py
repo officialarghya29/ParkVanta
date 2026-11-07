@@ -19,6 +19,7 @@ from app.models import (
     Tower,
     User,
 )
+from app.models.entities import generate_join_code
 from app.models.enums import Role, SlotStatus
 from app.schemas.auth import ResidentUpdateRequest, StaffCreateRequest, UserOut
 from app.schemas.common import Page
@@ -26,6 +27,7 @@ from app.schemas.tenancy import (
     ApartmentCreate,
     ApartmentOut,
     GuardOut,
+    JoinCodeOut,
     OrganizationCreate,
     OrganizationOut,
     PolicyOut,
@@ -134,6 +136,43 @@ def list_properties(db: Annotated[Session, Depends(get_db)], user: CurrentUser) 
 @router.get("/properties/{property_id}", response_model=PropertyOut)
 def get_property(property_id: UUID, db: Annotated[Session, Depends(get_db)], user: CurrentUser) -> PropertyOut:
     return PropertyOut.model_validate(_property_for(db, user, property_id))
+
+
+@router.get("/properties/{property_id}/join-code", response_model=JoinCodeOut)
+def get_join_code(
+    property_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    user: AdminUser,
+) -> JoinCodeOut:
+    prop = _property_for(db, user, property_id)
+    return JoinCodeOut(property_id=prop.id, join_code=prop.join_code)
+
+
+@router.post("/properties/{property_id}/join-code/rotate", response_model=JoinCodeOut)
+def rotate_join_code(
+    property_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    user: AdminUser,
+) -> JoinCodeOut:
+    prop = _property_for(db, user, property_id)
+    for _ in range(5):
+        candidate = generate_join_code()
+        if db.scalar(select(Property.id).where(Property.join_code == candidate)) is None:
+            prop.join_code = candidate
+            break
+    else:
+        raise ConflictError("Could not allocate a unique join code; try again")
+    audit_service.record(
+        db,
+        action="property.join_code_rotated",
+        entity_type="property",
+        organization_id=prop.organization_id,
+        actor_user_id=user.id,
+        entity_id=prop.id,
+    )
+    db.commit()
+    db.refresh(prop)
+    return JoinCodeOut(property_id=prop.id, join_code=prop.join_code)
 
 
 @router.post("/properties/{property_id}/towers", response_model=TowerOut, status_code=status.HTTP_201_CREATED)

@@ -5,11 +5,15 @@ import { AuthProvider, homeRouteFor, useAuth } from "./auth/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { Button, Card } from "./components/ui";
 import { AdminPage } from "./pages/AdminPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { GuardPage } from "./pages/GuardPage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PassPage } from "./pages/PassPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ResidentPage } from "./pages/ResidentPage";
+import type { Role } from "./lib/types";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,10 +21,19 @@ const queryClient = new QueryClient({
   },
 });
 
-function Protected({ children }: { children: ReactNode }) {
+function Protected({ children, roles }: { children: ReactNode; roles?: Role[] }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
+  if (roles && !roles.includes(user.role)) {
+    return <Navigate to={homeRouteFor(user.role)} replace />;
+  }
   return <AppShell>{children}</AppShell>;
+}
+
+function PublicOnly({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  if (user) return <Navigate to={homeRouteFor(user.role)} replace />;
+  return children;
 }
 
 function RootRedirect() {
@@ -57,11 +70,35 @@ export default function App() {
           <Routes>
             <Route path="/" element={<RootRedirect />} />
             <Route path="/login" element={<LoginRoute />} />
+            <Route
+              path="/register"
+              element={
+                <PublicOnly>
+                  <RegisterPage />
+                </PublicOnly>
+              }
+            />
+            <Route
+              path="/forgot-password"
+              element={
+                <PublicOnly>
+                  <ForgotPasswordPage />
+                </PublicOnly>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <PublicOnly>
+                  <ResetPasswordPage />
+                </PublicOnly>
+              }
+            />
             <Route path="/pass/:token" element={<PassPage />} />
             <Route
               path="/resident"
               element={
-                <Protected>
+                <Protected roles={["RESIDENT"]}>
                   <ResidentPage />
                 </Protected>
               }
@@ -69,7 +106,7 @@ export default function App() {
             <Route
               path="/guard"
               element={
-                <Protected>
+                <Protected roles={["SECURITY_GUARD", "SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}>
                   <GuardPage />
                 </Protected>
               }
@@ -77,7 +114,7 @@ export default function App() {
             <Route
               path="/admin"
               element={
-                <Protected>
+                <Protected roles={["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}>
                   <AdminPage />
                 </Protected>
               }
@@ -85,7 +122,7 @@ export default function App() {
             <Route
               path="/admin/inventory"
               element={
-                <Protected>
+                <Protected roles={["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}>
                   <InventoryPage />
                 </Protected>
               }

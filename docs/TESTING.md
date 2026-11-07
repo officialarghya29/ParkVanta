@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **30 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **37 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -12,7 +12,7 @@
 | Write benchmark | `make load-test-write` | **100 cycles · 18/18 allocations · 0 errors** |
 | Lint | `make lint` | **Ruff clean** |
 | Dependency audits | `make audit` | **0 Python · 0 Node advisories** |
-| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 23 tables |
+| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 23 tables · 3 migrations |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
 unique indexes are exercised with production semantics.
@@ -65,6 +65,8 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
 
 **Authentication and tenancy** (`test_auth.py`)
 - Login returns tokens and identity; wrong password yields 401.
+- Password reset sends a real single-use link through the mail adapter, rotates the password and revokes old
+  sessions; unknown emails return the same 202 without sending.
 - Refresh rotation works; reusing an old refresh token revokes the whole session family.
 - Suspended accounts cannot sign in.
 - Cross-organization property reads return 403.
@@ -83,6 +85,15 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
 - Manual override rejects short reasons and records an audit event.
 - Entry confirmation is rejected with `authorization_required` until an online authorization event exists, so an
   occupancy cannot be created by calling confirm directly.
+
+**Onboarding, notifications and bootstrap** (`test_bootstrap.py`, `test_onboarding.py`, `test_notifications.py`)
+- Bootstrap creates exactly one organization, property, default policy and society admin; duplicate slug or email
+  is refused.
+- A 16-character property join code resolves only apartment labels, registers a resident as unverified, and is
+  invalidated when rotated.
+- Join-code retrieval is admin-only; guards receive 403.
+- Notifications are scoped to their owner, unread counts change on read, `read-all` clears the inbox, and another
+  resident cannot mark someone else's notification.
 
 **Concurrency** (`test_concurrency.py`)
 - Two threads authorize the same pass simultaneously: outcomes are exactly `authorized` + `already_used`;
@@ -148,6 +159,8 @@ The production build type-checks the entire client (`tsc --noEmit`).
 7. Confirm the admin dashboard shows an occupied slot and one vehicle inside.
 8. Confirm exit; the slot returns to `AVAILABLE` and the invitation becomes `COMPLETED`.
 9. Attempt a second authorization with the same token; expect `already_used`.
+10. Sign in as `admin@skyline.dev`, open **Inventory**, copy the join code and open `/register` in a private
+    window. Register with an apartment; confirm the account appears as **Pending**, then **Verify** it.
 
 ## 5. Not yet automated
 
@@ -155,6 +168,7 @@ The production build type-checks the entire client (`tsc --noEmit`).
 | :--- | :--- |
 | Vision accuracy suite | Blocked on Stage 13 |
 | Long-disconnect replay (>500 frames) | Bounded Stream retention; older frames are reconciled by REST refetch |
+| Live SMTP relay | The mail adapter is tested with an injected sender; the pilot relay must be configured and tested |
 
 ## 6. Test data policy
 

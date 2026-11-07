@@ -6,7 +6,13 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.errors import AuthError, ConflictError, NotFoundError, ValidationError
+from app.core.errors import (
+    AuthError,
+    ConflictError,
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 from app.core.security import (
     create_access_token,
     generate_pass_token,
@@ -29,7 +35,7 @@ from app.models import (
 )
 from app.models.enums import Role
 from app.schemas.auth import RegisterRequest, StaffCreateRequest
-from app.services import audit_service
+from app.services import audit_service, mail_service
 
 logger = logging.getLogger("parkvanta.auth")
 
@@ -268,9 +274,30 @@ def request_password_reset(db: Session, email: str) -> None:
     )
     db.commit()
 
-    if not settings.is_production:
-        # Development affordance only: no mail provider is configured yet.
+    reset_url = f"{settings.app_public_url.rstrip('/')}/reset-password?token={raw_token}"
+    try:
+        mail_service.send_email(
+            to=user.email,
+            subject="Reset your ParkVanta password",
+            body=(
+                "A password reset was requested for your ParkVanta account.\n\n"
+                f"Open this link within 30 minutes:\n{reset_url}\n\n"
+                "If you did not request it, ignore this message."
+            ),
+        )
+    except mail_service.MailNotConfigured as exc:
+        if settings.is_production:
+            logger.error("Password reset requested but SMTP is not configured")
+            raise ServiceUnavailableError(
+                "Password reset email is not configured. Contact your administrator."
+            ) from exc
+        # Development affordance only, and only when no transport exists.
         logger.warning("Password reset token for %s (dev only): %s", user.email, raw_token)
+    except mail_service.MailDeliveryError as exc:
+        logger.exception("Password reset email delivery failed for %s", user.email)
+        raise ServiceUnavailableError(
+            "Password reset email could not be delivered. Try again later."
+        ) from exc
 
 
 def reset_password(db: Session, raw_token: str, new_password: str) -> None:

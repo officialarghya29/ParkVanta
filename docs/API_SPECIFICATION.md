@@ -21,8 +21,15 @@ Authentication: `Authorization: Bearer <access_token>`. The refresh token is set
 | POST | `/auth/logout` | any | Revokes the presented refresh token |
 | GET | `/auth/me` | bearer | Current identity |
 | POST | `/auth/users` | admin | Provision staff/resident accounts |
-| POST | `/auth/forgot-password` | public | Generic 202 response |
+| POST | `/auth/forgot-password` | public | Generic 202; delivers an SMTP link when configured |
 | POST | `/auth/reset-password` | public | Consumes a reset token, revokes sessions |
+
+## Public onboarding
+
+| Method | Path | Auth | Notes |
+| :--- | :--- | :--- | :--- |
+| GET | `/public/join/{join_code}` | public | Property name/address and apartment labels for a valid code |
+| POST | `/auth/register` | public | Creates an unverified resident for a returned property/apartment id |
 
 ## Society, property and inventory
 
@@ -31,6 +38,7 @@ Authentication: `Authorization: Bearer <access_token>`. The refresh token is set
 | POST/GET | `/organizations` | super admin (create), all (scoped read) |
 | POST/GET | `/properties` | admin, manager |
 | GET | `/properties/{id}` | scoped |
+| GET/POST | `/properties/{id}/join-code`, `/join-code/rotate` | admin, manager |
 | POST/GET | `/properties/{id}/towers` | admin, manager |
 | POST | `/apartments` | admin, manager |
 | GET | `/properties/{id}/apartments` | scoped |
@@ -114,7 +122,10 @@ replay. Events remain advisory: clients refetch REST after receipt and after rec
 | GET | `/analytics/parking-utilization` | per zone category |
 | GET | `/analytics/visitor-trends?days=` | invitations, entries, exits per day |
 | GET | `/analytics/overstays` | active occupancies past departure |
-| GET | `/notifications` | current user's in-app notifications |
+| GET | `/notifications?unread_only=&limit=&offset=` | current user's in-app notifications |
+| GET | `/notifications/unread-count` | unread badge count |
+| POST | `/notifications/{id}/read` | mark one owned notification read |
+| POST | `/notifications/read-all` | mark every owned notification read |
 
 ## Verification example
 

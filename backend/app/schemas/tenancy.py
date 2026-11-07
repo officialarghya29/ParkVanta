@@ -40,6 +40,27 @@ class PropertyOut(ORMModel):
     is_active: bool
 
 
+class JoinCodeOut(BaseModel):
+    property_id: UUID
+    join_code: str
+
+
+class JoinApartmentOut(BaseModel):
+    id: UUID
+    number: str
+    floor: int | None
+    tower_name: str | None
+
+
+class JoinPropertyOut(BaseModel):
+    property_id: UUID
+    name: str
+    address_line: str
+    city: str
+    state: str
+    apartments: list[JoinApartmentOut]
+
+
 class TowerCreate(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     floors: int | None = Field(default=None, ge=1, le=200)

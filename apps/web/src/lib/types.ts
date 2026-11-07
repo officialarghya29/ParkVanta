@@ -228,6 +228,47 @@ export interface Property {
   timezone: string;
 }
 
+export interface JoinApartment {
+  id: string;
+  number: string;
+  floor: number | null;
+  tower_name: string | null;
+}
+
+export interface JoinProperty {
+  property_id: string;
+  name: string;
+  address_line: string;
+  city: string;
+  state: string;
+  apartments: JoinApartment[];
+}
+
+export interface JoinCode {
+  property_id: string;
+  join_code: string;
+}
+
+export interface ResidentAccount {
+  user: User;
+  apartment_id: string;
+  is_verified: boolean;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  channel: string;
+  status: string;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface UnreadCount {
+  count: number;
+}
+
 export interface Tower {
   id: string;
   property_id: string;

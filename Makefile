@@ -1,4 +1,4 @@
-.PHONY: help install dev api migrate seed bootstrap test test-e2e load-test load-test-write build check-bundle web-install lint audit pilot-backup notify-worker worker-health vision-eval
+.PHONY: help install dev api migrate seed bootstrap test test-e2e load-test load-test-write build check-bundle web-install lint audit pilot-backup notify-worker worker-health vision-eval pilot-preflight
 
 help:
 	@echo "ParkVanta"
@@ -18,6 +18,7 @@ help:
 	@echo "  make notify-worker Dispatch queued visitor emails"
 	@echo "  make worker-health Fail when the outbox or a worker heartbeat is stale"
 	@echo "  make vision-eval   Score a vision manifest (MANIFEST=path.json)"
+	@echo "  make pilot-preflight  Fail when the deployment is not pilot-ready"
 	@echo "  make check-bundle  Build the frontend and enforce its gzip size budget"
 	@echo "  make up          Start Postgres + Redis via Docker Compose"
 
@@ -77,6 +78,9 @@ worker-health:
 
 vision-eval:
 	cd backend && ../.venv/bin/python -m app.vision $(MANIFEST)
+
+pilot-preflight:
+	cd backend && ../.venv/bin/python -m app.pilot_preflight
 
 build:
 	cd apps/web && npm run build

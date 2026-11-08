@@ -84,6 +84,7 @@ build → Nginx). A reference reverse-proxy config is in `infrastructure/nginx/p
 5. Deploy the API, web assets and both scheduled workers.
 6. Hit `/health` and `/ready`; confirm a login, one gate verification, one password-reset email and one queued
    visitor email marked `SENT`. Scrape `/metrics` and run the worker health check after the first worker cycle.
+   Then run `python -m app.pilot_preflight`; it must exit 0 before a real pilot is declared ready.
 7. Keep the previous image tag for rollback.
 
 **Rollback:** redeploy the previous image tag. Schema changes must be backward compatible for one release;

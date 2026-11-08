@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **49 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **51 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -15,6 +15,7 @@
 | Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 25 tables · 5 migrations |
 | Release gates | CI: bundle budget + Docker image builds | **JS/CSS gzip within budget · images under 450/120 MiB** |
 | Worker health | `make worker-health` | **Exit 1 on stale queue or missing heartbeat** |
+| Pilot preflight | `make pilot-preflight` | **Exit 1 on demo data, development secrets or missing workers** |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
 unique indexes are exercised with production semantics. API tests also assert request-id generation and safe echo
@@ -127,6 +128,9 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 - The health command fails on a stale outbox, then passes after the worker marks mail `SKIPPED`.
 - `/metrics` exposes outbox counts and worker age/up, and enforces the configured bearer token.
 - Two overlapping worker sessions upsert exactly one heartbeat row without a unique-key violation.
+
+**Pilot preflight** (`test_pilot_preflight.py`)
+- A demo-seeded database with no worker heartbeats is blocked; production configuration with fresh heartbeats passes.
 
 **Vision release gate** (`test_vision_evaluation.py`)
 - A valid manifest scores full-plate and occupancy accuracy, normalizes separators and exits 0 when it passes.

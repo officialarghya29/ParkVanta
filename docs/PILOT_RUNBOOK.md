@@ -20,6 +20,7 @@ Do not start the pilot until every item is true.
 | Data | Production PostgreSQL reachable, migrations at head, backup taken and restore rehearsed |
 | Secrets | Unique `JWT_SECRET`, database password and Redis password; no defaults |
 | Monitoring | `/health`, `/ready`, error-rate and backup-age alerts routed to a named on-call person |
+| Preflight | `make pilot-preflight` exits 0 against the production database |
 | Training | Guards have completed the acceptance script in §7 and know the printed override fallback |
 
 ### Pilot success metrics
@@ -130,7 +131,8 @@ curl -fsS -X POST https://pilot.example.com/api/v1/auth/login \
 
 Then open **Inventory**, copy the society join code, register one test resident at `/register`, verify the account
 in **Resident accounts**, and confirm that resident can issue and approve one invitation. Send one password-reset
-email to a real mailbox before go-live.
+email to a real mailbox before go-live. Run `make pilot-preflight` after the first worker cycle; it blocks on demo
+accounts, development secrets, missing workers, a stale outbox and non-HTTPS production origins.
 
 ---
 

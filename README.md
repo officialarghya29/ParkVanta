@@ -7,7 +7,7 @@
 ![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
 ![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
-![Tests](https://img.shields.io/badge/verified-49%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-51%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
 ![Telemetry](https://img.shields.io/badge/telemetry-Prometheus%20%C2%B7%20heartbeats-16A394?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
 
@@ -21,7 +21,7 @@
 
 > **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
 > approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
-> The repository contains **49 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> The repository contains **51 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
 > offline network transition, plus recorded **read** and **write** load runs. Production onboarding includes a
 > first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, an email
 > outbox worker and SMTP-backed password reset. Access tokens stay in memory; gate actions survive reloads in
@@ -65,7 +65,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 
 | Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Backend verification | **49 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
+| Backend verification | **51 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
 | Frontend verification | **5 passed** | `vitest run` |
 | Browser lifecycle | **1 passed** | Playwright · real Chrome |
 | Read load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
@@ -302,7 +302,7 @@ Each gate cycle commits three times and emits events, so its latency is intentio
 read benchmark. The contention figure is the stronger proof: with six free bays, exactly six approvals may win —
 and across 90 attempts, exactly 18 did, with no duplicate active row for any slot.
 
-<img src="docs/assets/chart-verification.png" alt="Verification matrix: 49 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 51 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
 
 ---
 
@@ -387,7 +387,7 @@ register at `/register`, select their apartment, and remain unverified until an 
 ## Verification
 
 ```bash
-make test                         # 49 backend tests on real PostgreSQL
+make test                         # 51 backend tests on real PostgreSQL
 cd apps/web && npm test           # 5 frontend unit tests
 cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
 cd apps/web && npm run build      # type-check + production bundle
@@ -398,7 +398,7 @@ make lint && make audit           # Ruff, pip-audit and npm audit
 
 | Suite | Command | Result |
 | :--- | :--- | ---: |
-| Backend | `pytest -q` | **49 passed** |
+| Backend | `pytest -q` | **51 passed** |
 | Frontend unit | `npm test` | **5 passed** |
 | Browser E2E | `npm run test:e2e` | **1 passed** |
 | Production build | `npm run build` | **passed** |
@@ -527,7 +527,7 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 | SMS/WhatsApp outbound is not implemented | Visitor updates are in-app + email only | Provider adapters with consent and delivery receipts |
 | Vision AI not deployed | No ANPR/occupancy inference | Score a candidate with the offline gate in `docs/VISION_EVALUATION.md`; deploy only after it passes |
 
-## Roadmap
+## Engineering roadmap — complete
 
 - [x] **0–14** Domain model, auth, RBAC, QR engine, parking engine, gate operations, realtime SSE with replay
 - [x] **15** Controlled offline gate mode: queued exits/overrides, idempotent reconciliation, online-only entry
@@ -539,10 +539,19 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 - [x] **17e** Durable event archive, email outbox worker, in-memory tokens and IndexedDB gate queue
 - [x] **17f** Durable worker heartbeats, Prometheus outbox metrics and a stale-queue health command
 - [x] **18a** Vision evaluation protocol, manifest validator and offline release gate
-- [ ] **18b** Deploy an ANPR/occupancy model after it passes the gate on a labelled pilot dataset
 - [x] **19a** Single-property pilot runbook with backup, restore and monitoring procedures
 - [x] **19b** Production hardening: request correlation ids, Prometheus metrics, worker heartbeats, health checks
-- [ ] **19c** Live single-property pilot (requires a real site, guards and a signed runbook)
+- [x] **19c** Pilot preflight that blocks demo data, development secrets, stale workers and a broken outbox
+
+## Field milestones — external inputs required
+
+These are not engineering phases and are not claimed as complete. They need assets that do not exist in this
+repository:
+
+| Milestone | Requires | State |
+| :--- | :--- | :--- |
+| ANPR/occupancy model deployment | A labelled pilot dataset and a model that passes `docs/VISION_EVALUATION.md` | Awaiting model + data |
+| Live single-property pilot | A real property, guards and a signed runbook | Awaiting site |
 
 ## Documentation
 

@@ -195,6 +195,58 @@ ls -lh backups/ | tail -3
 Weekly checks: restore drill, overstay review, guard feedback, dependency audit (`make audit`), and a review of
 manual overrides for reason quality.
 
+### 6.1 Notification outbox alerts and recovery
+
+Visitor email is queued in `notifications` and only leaves `PENDING` when SMTP accepts or rejects it. In-app notes
+arrive regardless, so a stuck outbox never blocks a gate decision.
+
+| Signal | Query threshold | Page when |
+| :--- | :--- | :--- |
+| Failed email | `status = 'FAILED'` | Any row |
+| Stuck queue | oldest `PENDING` email | > 10 minutes old |
+| Repeated retries | `attempts >= 3` on `PENDING` | Any row |
+| Worker stopped | last `notification dispatch complete` log line | > 5 minutes old |
+
+```sql
+-- Outbox health; run every 5 minutes and export the values as metrics
+select status, count(*),
+       min(created_at) filter (where status = 'PENDING') as oldest_pending,
+       max(attempts) filter (where status = 'PENDING') as max_attempts
+from notifications
+where channel = 'EMAIL'
+group by status;
+
+-- Rows that need an operator
+select id, user_id, title, attempts, created_at, next_attempt_at, left(error, 120)
+from notifications
+where channel = 'EMAIL'
+  and (status = 'FAILED'
+       or (status = 'PENDING' and created_at < now() - interval '10 minutes'))
+order by created_at
+limit 20;
+```
+
+Triage order:
+
+1. Check the cron entry and the worker log for the last successful run. A missing run is fixed by the scheduler, not
+   by editing rows.
+2. Confirm `SMTP_HOST`, `SMTP_FROM` and relay credentials in the pilot environment; run
+   `python -m app.workers.notifications` once by hand and read the logged counters.
+3. Fix the relay before requeueing. Requeue only rows created in the last 24 hours; older visitor notices are stale,
+   and the in-app note is already authoritative.
+
+```sql
+-- After the relay is fixed: retry FAILED/SKIPPED rows from the last 24 hours
+update notifications
+set status = 'PENDING', attempts = 0, next_attempt_at = now(), error = null, sent_at = null
+where channel = 'EMAIL'
+  and status in ('FAILED', 'SKIPPED')
+  and created_at > now() - interval '24 hours';
+```
+
+Never set `status = 'SENT'` by hand: `SENT` means the relay accepted the message. Do not paste email bodies or visitor
+contact details into tickets; use notification ids and the error column.
+
 ---
 
 ## 7. Guard acceptance script

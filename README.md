@@ -488,7 +488,8 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 - Visitor email uses a status-tracked outbox with bounded retries; no delivery is claimed before SMTP accepts it.
 - No PII in QR payloads; visitor-safe pass projection; no facial recognition.
 - The application refuses to boot in production with the default development JWT secret.
-- CI blocks on Ruff, `pip-audit`, `npm audit --omit=dev --audit-level=high`; Bandit high-severity findings are clean.
+- CI blocks on Ruff, `pip-audit`, npm audits (production and dev), the frontend gzip budget and Docker image
+  size budgets; Bandit high-severity findings are clean.
 
 ---
 

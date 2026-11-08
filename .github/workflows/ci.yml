@@ -132,6 +132,9 @@ jobs:
       - name: Audit production frontend dependencies
         working-directory: apps/web
         run: npm audit --omit=dev --audit-level=high
+      - name: Audit all frontend dependencies
+        working-directory: apps/web
+        run: npm audit --audit-level=high
 
   frontend:
     name: Frontend build
@@ -149,3 +152,24 @@ jobs:
       - name: Type-check and build
         working-directory: apps/web
         run: npm run build
+      - name: Enforce bundle size budget
+        run: node scripts/check_bundle_size.mjs
+
+  images:
+    name: Docker image size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build --tag parkvanta-api:ci backend
+      - name: Build web image
+        run: docker build --tag parkvanta-web:ci apps/web
+      - name: Enforce image size budgets
+        run: |
+          set -euo pipefail
+          api_size=$(docker image inspect --format '{{.Size}}' parkvanta-api:ci)
+          web_size=$(docker image inspect --format '{{.Size}}' parkvanta-web:ci)
+          echo "API image: $((api_size / 1024 / 1024)) MiB (budget 450 MiB)"
+          echo "Web image: $((web_size / 1024 / 1024)) MiB (budget 120 MiB)"
+          test "$api_size" -le $((450 * 1024 * 1024))
+          test "$web_size" -le $((120 * 1024 * 1024))

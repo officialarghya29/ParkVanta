@@ -124,7 +124,8 @@ metadata, and are written in the same transaction as the operation.
   development JWT secret.
 - Rate limiting on login and refresh, backed by Redis when present.
 - File uploads are not part of the current surface.
-- CI blocks on Ruff, `pip-audit`, `npm audit --omit=dev --audit-level=high`; Bandit high-severity is clean.
+- CI blocks on Ruff, `pip-audit`, npm audits for production and dev dependencies, the frontend gzip budget and
+  Docker image size budgets; Bandit high-severity is clean.
   The Python and Node audit results are both zero advisories at the recorded commit.
 
 ## 8. Privacy (DPDP-aligned design)

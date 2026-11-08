@@ -13,6 +13,7 @@
 | Lint | `make lint` | **Ruff clean** |
 | Dependency audits | `make audit` | **0 Python · 0 Node advisories** |
 | Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 24 tables · 4 migrations |
+| Release gates | CI: bundle budget + Docker image builds | **JS/CSS gzip within budget · images under 450/120 MiB** |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
 unique indexes are exercised with production semantics.
@@ -114,7 +115,7 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 - 505 archived events remain replayable after the Redis 500-frame window, proving durable reconnect recovery.
 
 **Notification outbox** (`test_notification_delivery.py`)
-- A queued email is sent once, marked `SENT`, and addressed to the resident.
+- A queued email is delivered over a real local SMTP server, marked `SENT`, and not sent twice.
 - SMTP failure increments attempts and schedules an exponential retry without losing the in-app note.
 - Missing SMTP marks the delivery `SKIPPED` rather than falsely claiming success.
 
@@ -175,7 +176,7 @@ The production build type-checks the entire client (`tsc --noEmit`).
 | Area | Status |
 | :--- | :--- |
 | Vision accuracy suite | Blocked on Stage 13 |
-| Live SMTP relay | The mail adapter and outbox are tested with an injected sender; the pilot relay must be configured and tested |
+| Live SMTP relay | A worker test delivers through a local SMTP server; failure paths inject relay errors. The pilot relay must be configured and tested |
 | SMS / WhatsApp delivery | Email and in-app delivery are implemented; SMS/WhatsApp providers are not |
 
 ## 6. Test data policy

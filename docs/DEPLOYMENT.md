@@ -94,7 +94,8 @@ python -m app.workers.notifications
 Run both every 60 seconds via cron, a Kubernetes CronJob, or a scheduled container. The expiry sweep expires
 passes/reservations/invitations, flags overstays and purges realtime events older than `EVENT_RETENTION_DAYS`.
 The notification worker drains the email outbox with `FOR UPDATE SKIP LOCKED`, retries SMTP failures and records
-`SENT`, `SKIPPED` or `FAILED`. Both are idempotent and safe to overlap.
+`SENT`, `SKIPPED` or `FAILED`. Both are idempotent and safe to overlap. Alert on any `FAILED` outbox row and on the
+oldest `PENDING` email older than 10 minutes; the triage and requeue queries are in the pilot runbook §6.1.
 
 ## 6. Backups and recovery
 

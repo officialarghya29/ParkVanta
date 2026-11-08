@@ -169,5 +169,9 @@ class PolicyUpdate(BaseModel):
     max_active_visitors: int | None = Field(default=None, ge=0, le=5000)
     allow_manual_override: bool | None = None
     require_vehicle_for_entry: bool | None = None
-    visitor_window_start: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
-    visitor_window_end: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    visitor_window_start: str | None = Field(
+        default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+    )
+    visitor_window_end: str | None = Field(
+        default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+    )

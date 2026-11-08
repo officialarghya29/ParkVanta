@@ -26,24 +26,22 @@ MAX_ATTEMPTS = 5
 
 def dispatch_notifications(db: Session, *, now=None, limit: int = 50) -> dict[str, int]:
     now = now or utcnow()
-    rows = list(
-        db.scalars(
-            select(Notification)
-            .where(
-                Notification.channel == NotificationChannel.EMAIL.value,
-                Notification.status == NotificationStatus.PENDING.value,
-                (Notification.next_attempt_at.is_(None))
-                | (Notification.next_attempt_at <= now),
-            )
-            .order_by(Notification.created_at)
-            .limit(limit)
-            .with_for_update(skip_locked=True)
+    rows = db.execute(
+        select(Notification, User)
+        .outerjoin(User, Notification.user_id == User.id)
+        .where(
+            Notification.channel == NotificationChannel.EMAIL.value,
+            Notification.status == NotificationStatus.PENDING.value,
+            (Notification.next_attempt_at.is_(None))
+            | (Notification.next_attempt_at <= now),
         )
-    )
+        .order_by(Notification.created_at)
+        .limit(limit)
+        .with_for_update(skip_locked=True, of=Notification)
+    ).all()
     result = {"sent": 0, "skipped": 0, "failed": 0, "retrying": 0}
 
-    for note in rows:
-        user = db.get(User, note.user_id) if note.user_id else None
+    for note, user in rows:
         if user is None or not user.is_active or user.is_suspended:
             note.status = NotificationStatus.FAILED.value
             note.error = "Recipient account is unavailable"

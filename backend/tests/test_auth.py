@@ -91,6 +91,18 @@ def test_expired_access_token_is_rejected(client, world, db_session):
     assert client.get("/api/v1/auth/me", headers=auth(token)).status_code == 200
 
 
+def test_validation_error_does_not_echo_submitted_secrets(client):
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "not-an-email", "password": "SecretPass123!"},
+    )
+
+    assert response.status_code == 422
+    assert "SecretPass123!" not in response.text
+    details = response.json()["error"]["details"]
+    assert all("input" not in detail and "ctx" not in detail for detail in details)
+
+
 def test_audit_trail_records_login(client, world, db_session):
     from app.models import AuditLog
 

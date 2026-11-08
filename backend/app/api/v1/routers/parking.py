@@ -13,6 +13,7 @@ from app.models import (
     ParkingOccupancy,
     ParkingReservation,
     ParkingSlot,
+    Property,
     User,
     Vehicle,
     Visitor,
@@ -256,6 +257,10 @@ def available_slots(
     stmt = select(ParkingSlot).where(ParkingSlot.status == SlotStatus.AVAILABLE.value)
     if target is not None:
         stmt = stmt.where(ParkingSlot.property_id == target)
+    elif user.role != Role.SUPER_ADMIN.value:
+        stmt = stmt.join(Property, ParkingSlot.property_id == Property.id).where(
+            Property.organization_id == user.organization_id
+        )
     slots = list(db.scalars(stmt.order_by(ParkingSlot.code).limit(100)))
     return [
         {

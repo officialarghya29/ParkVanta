@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **53 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **60 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -20,7 +20,8 @@
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
 unique indexes are exercised with production semantics. API tests also assert request-id generation and safe echo
 (`test_request_context.py`). Deprecation warnings are errors, and `test_query_efficiency.py` pins bounded query counts
-for the invitation page and analytics overview.
+for the invitation page and analytics overview. Security-boundary tests cover trusted proxy headers, Redis rate-limit
+fallback, secret-free validation errors, readiness degradation and cross-tenant slot visibility.
 
 ## 1.1 Recorded load run
 
@@ -77,6 +78,14 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
 - Cross-organization property reads return 403.
 - Guards cannot read another property's inventory.
 - Login writes an audit row.
+- A rejected login body does not echo the submitted password in validation details.
+
+**Security boundaries** (`test_client_ip.py`, `test_rate_limit.py`, `test_health.py`, `test_parking_scope.py`)
+- `X-Forwarded-For` is ignored unless the immediate peer is a configured trusted proxy; spoofed chains are reduced
+  to the nearest untrusted hop.
+- A Redis outage falls back to the in-process sliding limiter instead of raising a 500.
+- `/ready` returns a structured `503` when PostgreSQL is unavailable.
+- A society-wide admin with no assigned property sees only slots inside their organization.
 
 **Visitor lifecycle** (`test_invitation_flow.py`)
 - Full flow: create → approve (slot assigned) → public pass view → verify → authorize → confirm entry
@@ -133,6 +142,10 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 **Query efficiency** (`test_query_efficiency.py`)
 - An invitation page with six rows stays within a fixed query budget instead of scaling with row count.
 - The analytics overview returns its counters from one aggregate query.
+
+**Policy validation** (`test_policy.py`)
+- Overnight visitor windows such as `22:00 → 06:00` are accepted and evaluated correctly.
+- Equal start/end times and invalid clock values such as `25:00` are rejected with `422`.
 
 **Pilot preflight** (`test_pilot_preflight.py`)
 - A demo-seeded database with no worker heartbeats is blocked; production configuration with fresh heartbeats passes.

@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from ipaddress import ip_address, ip_network
 from typing import Annotated
 from uuid import UUID
 
@@ -6,6 +7,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.errors import AuthError, ForbiddenError, NotFoundError
 from app.core.security import TokenError, decode_access_token
 from app.database.session import get_db
@@ -83,8 +85,37 @@ def assert_property_access(db: Session, user: User, property_id: UUID) -> Proper
     return prop
 
 
+def _is_trusted_proxy(host: str) -> bool:
+    try:
+        address = ip_address(host)
+    except ValueError:
+        return False
+    for entry in settings.trusted_proxy_list:
+        try:
+            if "/" in entry:
+                if address in ip_network(entry, strict=False):
+                    return True
+            elif address == ip_address(entry):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def client_ip(request: Request) -> str:
+    """Use X-Forwarded-For only when the immediate peer is a configured proxy."""
+    peer = request.client.host if request.client else None
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    if not peer or not forwarded or not _is_trusted_proxy(peer):
+        return peer or "unknown"
+
+    # Walk from the nearest hop leftwards and return the first untrusted address.
+    # This prevents a caller from choosing its own rate-limit bucket with a fake header.
+    for candidate in reversed([part.strip() for part in forwarded.split(",") if part.strip()]):
+        try:
+            ip_address(candidate)
+        except ValueError:
+            continue
+        if not _is_trusted_proxy(candidate):
+            return candidate
+    return peer

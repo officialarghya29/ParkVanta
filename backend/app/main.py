@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_router
@@ -77,6 +77,14 @@ async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
     )
 
 
+def _safe_validation_details(exc: RequestValidationError) -> list[dict]:
+    """Keep field locations and messages without echoing submitted secrets."""
+    return [
+        {key: value for key, value in error.items() if key not in {"input", "ctx", "url"}}
+        for error in exc.errors()
+    ]
+
+
 @app.exception_handler(RequestValidationError)
 async def handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
     return JSONResponse(
@@ -85,7 +93,7 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
             "error": {
                 "code": "validation_error",
                 "message": "The submitted data is invalid.",
-                "details": jsonable_encoder(exc.errors()),
+                "details": jsonable_encoder(_safe_validation_details(exc)),
             }
         },
     )
@@ -127,10 +135,16 @@ def health() -> dict:
 
 
 @app.get("/ready", tags=["Health"], summary="Readiness probe (checks the database)")
-def ready() -> dict:
-    with engine.connect() as connection:
-        connection.execute(text("SELECT 1"))
-    return {"status": "ready", "database": "ok"}
+def ready() -> JSONResponse:
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        logger.exception("Readiness check failed: database unavailable")
+        return JSONResponse(
+            status_code=503, content={"status": "unavailable", "database": "unavailable"}
+        )
+    return JSONResponse(content={"status": "ready", "database": "ok"})
 
 
 @app.get("/metrics", include_in_schema=False)

@@ -11,6 +11,7 @@ from app.models import (
     ParkingOccupancy,
     ParkingReservation,
     ParkingSlot,
+    ParkingZone,
     User,
     Vehicle,
     Visitor,
@@ -408,11 +409,20 @@ def manual_override(
 def active_visitors(db: Session, *, guard: User, property_id: UUID | None) -> list[dict]:
     target = property_id or guard.property_id
     stmt = (
-        select(ParkingOccupancy, Invitation, Visitor, Vehicle, ParkingSlot, ParkingReservation)
+        select(
+            ParkingOccupancy,
+            Invitation,
+            Visitor,
+            Vehicle,
+            ParkingSlot,
+            ParkingZone,
+            ParkingReservation,
+        )
         .join(Invitation, ParkingOccupancy.invitation_id == Invitation.id)
         .join(Visitor, Invitation.visitor_id == Visitor.id)
         .outerjoin(Vehicle, Invitation.vehicle_id == Vehicle.id)
         .join(ParkingSlot, ParkingOccupancy.slot_id == ParkingSlot.id)
+        .join(ParkingZone, ParkingSlot.zone_id == ParkingZone.id)
         .join(ParkingReservation, ParkingOccupancy.reservation_id == ParkingReservation.id)
         .where(ParkingOccupancy.status == OccupancyStatus.ACTIVE.value)
     )
@@ -428,13 +438,13 @@ def active_visitors(db: Session, *, guard: User, property_id: UUID | None) -> li
             "visitor_name": visitor.name,
             "vehicle_registration": vehicle.registration_number if vehicle else None,
             "slot_code": slot.code,
-            "zone_name": None,
+            "zone_name": zone.name,
             "entered_at": occupancy.entered_at,
             "expected_departure": reservation.reserved_until,
             "overstay": occupancy.overstay
             or reservation.reserved_until < utcnow(),
         }
-        for occupancy, invitation, visitor, vehicle, slot, reservation in rows
+        for occupancy, invitation, visitor, vehicle, slot, zone, reservation in rows
     ]
 
 

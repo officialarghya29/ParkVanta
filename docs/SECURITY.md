@@ -8,7 +8,8 @@
 | Parking inventory | Double allocation | Row locks, `SKIP LOCKED`, partial unique indexes |
 | Offline queue | Replay / forged entry | Online-only authorization, unique client-event ledger, clock checks |
 | Tenant data | Cross-society reads | Query scoping + service assertions + regression tests |
-| Accounts | Credential stuffing | Argon2id, login rate limits, generic failure messages |
+| Accounts | Credential stuffing | Argon2id, sliding-window login limits, generic failure messages |
+| Rate-limit keys | Spoofed `X-Forwarded-For` | Trusted-proxy allowlist; untrusted headers ignored |
 | Onboarding | Outsider joins a society | 64-bit join code, admin-only retrieval/rotation, admin verification |
 | Sessions | Refresh token theft | Rotation, family revocation on replay, httpOnly cookie |
 | Gate decisions | Unlogged overrides | Mandatory reason, immutable event + audit row |
@@ -129,7 +130,11 @@ metadata, and are written in the same transaction as the operation.
 - Consistent, sanitized error envelope; stack traces never returned.
 - Secrets from environment; `.env` is git-ignored; the app refuses to start in production with the default
   development JWT secret.
-- Rate limiting on login and refresh, backed by Redis when present.
+- Rate limiting on login and refresh uses a Redis sliding window when present and a bounded in-process
+  sliding window during an outage. The immediate peer must match `TRUSTED_PROXIES` before `X-Forwarded-For` is
+  used for the rate-limit key or audit address.
+- Validation errors return field locations and messages only; submitted values, including passwords, are never
+  echoed back.
 - File uploads are not part of the current surface.
 - CI blocks on Ruff, `pip-audit`, npm audits for production and dev dependencies, the frontend gzip budget and
   Docker image size budgets; Bandit high-severity is clean.

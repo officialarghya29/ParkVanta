@@ -541,8 +541,8 @@ def update_policy(
     policy = parking_service.ensure_policy(db, property_id=property_id)
     for field, value in payload.model_dump(exclude_none=True).items():
         setattr(policy, field, value)
-    if policy.visitor_window_start >= policy.visitor_window_end:
-        raise ValidationError("Visitor window start must be earlier than the end time")
+    if policy.visitor_window_start == policy.visitor_window_end:
+        raise ValidationError("Visitor window start and end must differ")
     audit_service.record(
         db,
         action="policy.updated",

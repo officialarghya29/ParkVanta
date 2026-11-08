@@ -66,6 +66,7 @@ publicly reachable. The SPA and API share one origin so CORS stays narrow.
 | `JWT_SECRET` | `openssl rand -hex 48`; store in the secret manager |
 | `REDIS_URL` | Private Redis URL; no public port |
 | `CORS_ORIGINS` | Exactly the pilot HTTPS origin |
+| `TRUSTED_PROXIES` | Ingress/load-balancer IP or CIDR allowed to supply `X-Forwarded-For` |
 | `APP_PUBLIC_URL` | The pilot HTTPS origin, used in password-reset links |
 | `SMTP_*` | Society mail relay; required for password reset and visitor email |
 | `EVENT_RETENTION_DAYS` | `30` by default; durable SSE replay window |

@@ -23,6 +23,7 @@ Verify: `curl http://localhost:8080/health` and `curl http://localhost:8080/read
 | `ENVIRONMENT` | ✅ | `production` enables secret validation and secure cookies |
 | `REDIS_URL` | recommended | Rate limiting falls back to per-process state |
 | `CORS_ORIGINS` | ✅ | Comma-separated SPA origins |
+| `TRUSTED_PROXIES` | behind a proxy | Comma-separated proxy IPs/CIDRs allowed to set `X-Forwarded-For`; empty ignores it |
 | `APP_PUBLIC_URL` | ✅ | Public SPA origin used in password-reset links |
 | `SMTP_HOST` | for reset | Mail relay host; leave empty only in development |
 | `SMTP_PORT` | for reset | Default `587`; use `465` with `SMTP_USE_SSL=true` |
@@ -70,6 +71,9 @@ Internet → TLS / WAF / ingress
                                  ├── notification outbox worker (scheduled)
                                  └── worker health check (scheduled)
 ```
+
+Set `TRUSTED_PROXIES` to the ingress/load-balancer CIDR (for example `10.0.0.0/8`) so rate limits and audit rows
+use the client address rather than the proxy address. Leave it empty when clients connect directly.
 
 Backend image: `backend/Dockerfile` (non-root user, healthcheck). Web image: `apps/web/Dockerfile` (multi-stage
 build → Nginx). A reference reverse-proxy config is in `infrastructure/nginx/parkvanta.conf`. Prometheus can scrape

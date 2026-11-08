@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     allowed_hosts: str = "*"
+    trusted_proxies: str = ""
 
     login_rate_limit: int = 10
     login_rate_window_seconds: int = 60
@@ -70,6 +71,10 @@ class Settings(BaseSettings):
     @property
     def allowed_host_list(self) -> list[str]:
         return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
+
+    @property
+    def trusted_proxy_list(self) -> list[str]:
+        return [proxy.strip() for proxy in self.trusted_proxies.split(",") if proxy.strip()]
 
     @property
     def is_production(self) -> bool:

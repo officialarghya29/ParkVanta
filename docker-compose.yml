@@ -40,6 +40,8 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-jwt-secret-change-before-deploying}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     ports:
       - "8080:8000"
     depends_on:

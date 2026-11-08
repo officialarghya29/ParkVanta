@@ -1,4 +1,5 @@
 import smtplib
+import ssl
 from email.message import EmailMessage
 
 from app.core.config import settings
@@ -23,16 +24,17 @@ def send_email(*, to: str, subject: str, body: str) -> None:
     message["Subject"] = subject
     message.set_content(body)
 
+    context = ssl.create_default_context()
     try:
         if settings.smtp_use_ssl:
             client: smtplib.SMTP = smtplib.SMTP_SSL(
-                settings.smtp_host, settings.smtp_port, timeout=10
+                settings.smtp_host, settings.smtp_port, timeout=10, context=context
             )
         else:
             client = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10)
         with client:
             if settings.smtp_use_tls and not settings.smtp_use_ssl:
-                client.starttls()
+                client.starttls(context=context)
             if settings.smtp_username:
                 client.login(settings.smtp_username, settings.smtp_password)
             client.send_message(message)

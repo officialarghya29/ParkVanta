@@ -9,7 +9,8 @@ license = { text = "Proprietary — all rights reserved by the ParkVanta Team" }
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = [
-    "ignore::DeprecationWarning",
+    "error::DeprecationWarning",
+    "error::PendingDeprecationWarning",
 ]
 
 [tool.ruff]

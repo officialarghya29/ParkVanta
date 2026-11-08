@@ -15,7 +15,13 @@ from app.models import (
     Vehicle,
     Visitor,
 )
-from app.models.enums import EventDecision, EventDirection, OccupancyStatus, SlotStatus
+from app.models.enums import (
+    EventDecision,
+    EventDirection,
+    OccupancyStatus,
+    ReservationStatus,
+    SlotStatus,
+)
 
 
 def _start_of_today() -> datetime:
@@ -24,77 +30,83 @@ def _start_of_today() -> datetime:
 
 
 def overview(db: Session, *, property_id: UUID) -> dict:
-    slot_rows = db.execute(
-        select(ParkingSlot.status, func.count(ParkingSlot.id))
-        .where(ParkingSlot.property_id == property_id)
-        .group_by(ParkingSlot.status)
-    ).all()
-    counts = {status: int(count) for status, count in slot_rows}
-    total = sum(counts.values())
-    reserved = counts.get(SlotStatus.RESERVED.value, 0)
-    occupied = counts.get(SlotStatus.OCCUPIED.value, 0)
-    utilized = reserved + occupied
-
+    """Dashboard counters in one round-trip instead of one query per counter."""
     start = _start_of_today()
-    visitors_inside = int(
-        db.scalar(
-            select(func.count(ParkingOccupancy.id)).where(
-                ParkingOccupancy.property_id == property_id,
-                ParkingOccupancy.status == OccupancyStatus.ACTIVE.value,
-            )
+    now = utcnow()
+    active_occupancy = ParkingOccupancy.status == OccupancyStatus.ACTIVE.value
+
+    statement = select(
+        func.count(ParkingSlot.id).label("total"),
+        func.count(ParkingSlot.id)
+        .filter(ParkingSlot.status == SlotStatus.AVAILABLE.value)
+        .label("available"),
+        func.count(ParkingSlot.id)
+        .filter(ParkingSlot.status == SlotStatus.RESERVED.value)
+        .label("reserved"),
+        func.count(ParkingSlot.id)
+        .filter(ParkingSlot.status == SlotStatus.OCCUPIED.value)
+        .label("occupied"),
+        func.count(ParkingSlot.id)
+        .filter(ParkingSlot.status == SlotStatus.BLOCKED.value)
+        .label("blocked"),
+        func.count(ParkingSlot.id)
+        .filter(ParkingSlot.status == SlotStatus.MAINTENANCE.value)
+        .label("maintenance"),
+        select(func.count(ParkingOccupancy.id))
+        .where(ParkingOccupancy.property_id == property_id, active_occupancy)
+        .scalar_subquery()
+        .label("visitors_inside"),
+        select(func.count(ParkingReservation.id))
+        .where(
+            ParkingReservation.property_id == property_id,
+            ParkingReservation.status == ReservationStatus.ACTIVE.value,
         )
-        or 0
-    )
-    active_reservations = int(
-        db.scalar(
-            select(func.count(ParkingReservation.id)).where(
-                ParkingReservation.property_id == property_id,
-                ParkingReservation.status == "ACTIVE",
-            )
+        .scalar_subquery()
+        .label("active_reservations"),
+        select(func.count(Invitation.id))
+        .where(Invitation.property_id == property_id, Invitation.created_at >= start)
+        .scalar_subquery()
+        .label("visitors_today"),
+        select(func.count(EntryExitEvent.id))
+        .where(
+            EntryExitEvent.property_id == property_id,
+            EntryExitEvent.created_at >= start,
+            EntryExitEvent.direction == EventDirection.ENTRY.value,
+            EntryExitEvent.decision == EventDecision.DENIED.value,
         )
-        or 0
-    )
-    visitors_today = int(
-        db.scalar(
-            select(func.count(Invitation.id)).where(
-                Invitation.property_id == property_id, Invitation.created_at >= start
-            )
+        .scalar_subquery()
+        .label("rejected_today"),
+        select(func.count(EntryExitEvent.id))
+        .where(
+            EntryExitEvent.property_id == property_id,
+            EntryExitEvent.created_at >= start,
+            EntryExitEvent.decision == EventDecision.MANUAL_OVERRIDE.value,
         )
-        or 0
-    )
-    rejected_today = int(
-        db.scalar(
-            select(func.count(EntryExitEvent.id)).where(
-                EntryExitEvent.property_id == property_id,
-                EntryExitEvent.created_at >= start,
-                EntryExitEvent.direction == EventDirection.ENTRY.value,
-                EntryExitEvent.decision == EventDecision.DENIED.value,
-            )
+        .scalar_subquery()
+        .label("overrides_today"),
+        select(func.count(ParkingOccupancy.id))
+        .join(ParkingReservation, ParkingOccupancy.reservation_id == ParkingReservation.id)
+        .where(
+            ParkingOccupancy.property_id == property_id,
+            active_occupancy,
+            ParkingReservation.reserved_until < now,
         )
-        or 0
-    )
-    overrides_today = int(
-        db.scalar(
-            select(func.count(EntryExitEvent.id)).where(
-                EntryExitEvent.property_id == property_id,
-                EntryExitEvent.created_at >= start,
-                EntryExitEvent.decision == EventDecision.MANUAL_OVERRIDE.value,
-            )
-        )
-        or 0
-    )
-    overstays = int(
-        db.scalar(
-            select(func.count(ParkingOccupancy.id))
-            .join(ParkingReservation, ParkingOccupancy.reservation_id == ParkingReservation.id)
-            .where(
-                ParkingOccupancy.property_id == property_id,
-                ParkingOccupancy.status == OccupancyStatus.ACTIVE.value,
-                ParkingReservation.reserved_until < utcnow(),
-            )
-        )
-        or 0
-    )
+        .scalar_subquery()
+        .label("overstays"),
+    ).where(ParkingSlot.property_id == property_id)
+
+    row = db.execute(statement).one()._mapping
+    total = int(row["total"])
+    reserved = int(row["reserved"])
+    occupied = int(row["occupied"])
+    utilized = reserved + occupied
+    counts = {
+        SlotStatus.AVAILABLE.value: int(row["available"]),
+        SlotStatus.RESERVED.value: reserved,
+        SlotStatus.OCCUPIED.value: occupied,
+        SlotStatus.BLOCKED.value: int(row["blocked"]),
+        SlotStatus.MAINTENANCE.value: int(row["maintenance"]),
+    }
 
     return {
         "property_id": property_id,
@@ -105,12 +117,12 @@ def overview(db: Session, *, property_id: UUID) -> dict:
         "blocked_slots": counts.get(SlotStatus.BLOCKED.value, 0),
         "maintenance_slots": counts.get(SlotStatus.MAINTENANCE.value, 0),
         "utilization_percent": round(utilized / total * 100, 2) if total else 0.0,
-        "visitors_inside": visitors_inside,
-        "active_reservations": active_reservations,
-        "total_visitors_today": visitors_today,
-        "rejected_entries_today": rejected_today,
-        "manual_overrides_today": overrides_today,
-        "overstays": overstays,
+        "visitors_inside": int(row["visitors_inside"]),
+        "active_reservations": int(row["active_reservations"]),
+        "total_visitors_today": int(row["visitors_today"]),
+        "rejected_entries_today": int(row["rejected_today"]),
+        "manual_overrides_today": int(row["overrides_today"]),
+        "overstays": int(row["overstays"]),
     }
 
 

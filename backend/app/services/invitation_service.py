@@ -91,41 +91,87 @@ def list_invitations(
     return items, total
 
 
-def serialize_invitation(db: Session, invitation: Invitation) -> dict[str, Any]:
-    visitor = db.get(Visitor, invitation.visitor_id)
-    vehicle = db.get(Vehicle, invitation.vehicle_id) if invitation.vehicle_id else None
-    resident = db.get(User, invitation.resident_user_id)
-    qr_pass = db.scalar(select(QRPass).where(QRPass.invitation_id == invitation.id))
-    reservation = db.scalar(
+def serialize_invitations(db: Session, invitations: list[Invitation]) -> list[dict[str, Any]]:
+    """Serialize a page with a fixed number of queries instead of per-row lookups."""
+    if not invitations:
+        return []
+
+    invitation_ids = {invitation.id for invitation in invitations}
+    visitor_ids = {invitation.visitor_id for invitation in invitations}
+    vehicle_ids = {invitation.vehicle_id for invitation in invitations if invitation.vehicle_id}
+    resident_ids = {invitation.resident_user_id for invitation in invitations}
+
+    visitors = {row.id: row for row in db.scalars(select(Visitor).where(Visitor.id.in_(visitor_ids)))}
+    vehicles = (
+        {row.id: row for row in db.scalars(select(Vehicle).where(Vehicle.id.in_(vehicle_ids)))}
+        if vehicle_ids
+        else {}
+    )
+    residents = {row.id: row for row in db.scalars(select(User).where(User.id.in_(resident_ids)))}
+    passes = {
+        row.invitation_id: row
+        for row in db.scalars(select(QRPass).where(QRPass.invitation_id.in_(invitation_ids)))
+    }
+    reservation_rows = db.scalars(
         select(ParkingReservation)
-        .where(ParkingReservation.invitation_id == invitation.id)
+        .where(ParkingReservation.invitation_id.in_(invitation_ids))
         .order_by(ParkingReservation.created_at.desc())
     )
-    slot = db.get(ParkingSlot, reservation.slot_id) if reservation else None
-    zone = db.get(ParkingZone, slot.zone_id) if slot else None
+    reservations: dict[UUID, ParkingReservation] = {}
+    for reservation in reservation_rows:
+        reservations.setdefault(reservation.invitation_id, reservation)
 
-    return {
-        "id": invitation.id,
-        "property_id": invitation.property_id,
-        "resident_user_id": invitation.resident_user_id,
-        "resident_name": resident.full_name if resident else "Resident",
-        "visitor_name": visitor.name if visitor else "Visitor",
-        "visitor_phone": visitor.phone if visitor else None,
-        "vehicle_registration": vehicle.registration_number if vehicle else None,
-        "vehicle_category": vehicle.category if vehicle else None,
-        "visitor_type": invitation.visitor_type,
-        "purpose": invitation.purpose,
-        "expected_arrival": invitation.expected_arrival,
-        "expected_departure": invitation.expected_departure,
-        "status": invitation.status,
-        "rejection_reason": invitation.rejection_reason,
-        "approved_at": invitation.approved_at,
-        "parking_slot_code": slot.code if slot else None,
-        "parking_zone": zone.name if zone else None,
-        "pass_expires_at": qr_pass.expires_at if qr_pass else None,
-        "pass_status": qr_pass.status if qr_pass else None,
-        "created_at": invitation.created_at,
-    }
+    slot_ids = {reservation.slot_id for reservation in reservations.values()}
+    slots = (
+        {row.id: row for row in db.scalars(select(ParkingSlot).where(ParkingSlot.id.in_(slot_ids)))}
+        if slot_ids
+        else {}
+    )
+    zone_ids = {slot.zone_id for slot in slots.values()}
+    zones = (
+        {row.id: row for row in db.scalars(select(ParkingZone).where(ParkingZone.id.in_(zone_ids)))}
+        if zone_ids
+        else {}
+    )
+
+    serialized = []
+    for invitation in invitations:
+        visitor = visitors.get(invitation.visitor_id)
+        vehicle = vehicles.get(invitation.vehicle_id) if invitation.vehicle_id else None
+        resident = residents.get(invitation.resident_user_id)
+        qr_pass = passes.get(invitation.id)
+        reservation = reservations.get(invitation.id)
+        slot = slots.get(reservation.slot_id) if reservation else None
+        zone = zones.get(slot.zone_id) if slot else None
+        serialized.append(
+            {
+                "id": invitation.id,
+                "property_id": invitation.property_id,
+                "resident_user_id": invitation.resident_user_id,
+                "resident_name": resident.full_name if resident else "Resident",
+                "visitor_name": visitor.name if visitor else "Visitor",
+                "visitor_phone": visitor.phone if visitor else None,
+                "vehicle_registration": vehicle.registration_number if vehicle else None,
+                "vehicle_category": vehicle.category if vehicle else None,
+                "visitor_type": invitation.visitor_type,
+                "purpose": invitation.purpose,
+                "expected_arrival": invitation.expected_arrival,
+                "expected_departure": invitation.expected_departure,
+                "status": invitation.status,
+                "rejection_reason": invitation.rejection_reason,
+                "approved_at": invitation.approved_at,
+                "parking_slot_code": slot.code if slot else None,
+                "parking_zone": zone.name if zone else None,
+                "pass_expires_at": qr_pass.expires_at if qr_pass else None,
+                "pass_status": qr_pass.status if qr_pass else None,
+                "created_at": invitation.created_at,
+            }
+        )
+    return serialized
+
+
+def serialize_invitation(db: Session, invitation: Invitation) -> dict[str, Any]:
+    return serialize_invitations(db, [invitation])[0]
 
 
 def create_invitation(

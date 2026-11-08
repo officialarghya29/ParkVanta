@@ -68,6 +68,10 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
+    def allowed_host_list(self) -> list[str]:
+        return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
+
+    @property
     def is_production(self) -> bool:
         return self.environment.lower() in {"production", "prod", "staging"}
 

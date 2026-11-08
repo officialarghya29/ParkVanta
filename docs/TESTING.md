@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **51 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **53 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -12,14 +12,15 @@
 | Write benchmark | `make load-test-write` | **100 cycles · 18/18 allocations · 0 errors** |
 | Lint | `make lint` | **Ruff clean** |
 | Dependency audits | `make audit` | **0 Python · 0 Node advisories** |
-| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 25 tables · 5 migrations |
+| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 25 tables · 6 migrations |
 | Release gates | CI: bundle budget + Docker image builds | **JS/CSS gzip within budget · images under 450/120 MiB** |
 | Worker health | `make worker-health` | **Exit 1 on stale queue or missing heartbeat** |
 | Pilot preflight | `make pilot-preflight` | **Exit 1 on demo data, development secrets or missing workers** |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
 unique indexes are exercised with production semantics. API tests also assert request-id generation and safe echo
-(`test_request_context.py`).
+(`test_request_context.py`). Deprecation warnings are errors, and `test_query_efficiency.py` pins bounded query counts
+for the invitation page and analytics overview.
 
 ## 1.1 Recorded load run
 
@@ -128,6 +129,10 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 - The health command fails on a stale outbox, then passes after the worker marks mail `SKIPPED`.
 - `/metrics` exposes outbox counts and worker age/up, and enforces the configured bearer token.
 - Two overlapping worker sessions upsert exactly one heartbeat row without a unique-key violation.
+
+**Query efficiency** (`test_query_efficiency.py`)
+- An invitation page with six rows stays within a fixed query budget instead of scaling with row count.
+- The analytics overview returns its counters from one aggregate query.
 
 **Pilot preflight** (`test_pilot_preflight.py`)
 - A demo-seeded database with no worker heartbeats is blocked; production configuration with fresh heartbeats passes.

@@ -48,7 +48,10 @@ services:
       redis:
         condition: service_healthy
     command: >
-      sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      sh -c "alembic upgrade head &&
+      case $$ENVIRONMENT in production|prod|staging) echo 'production: skipping demo seed' ;;
+      *) python -m app.seed ;; esac &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   web:
     image: node:22-alpine

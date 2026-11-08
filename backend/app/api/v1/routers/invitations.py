@@ -45,7 +45,7 @@ def list_invitations(
         db, user, status=status_filter, search=search, limit=limit, offset=offset
     )
     return Page[InvitationOut](
-        items=[InvitationOut(**invitation_service.serialize_invitation(db, inv)) for inv in items],
+        items=[InvitationOut(**row) for row in invitation_service.serialize_invitations(db, items)],
         total=total,
         limit=limit,
         offset=offset,

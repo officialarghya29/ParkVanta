@@ -170,6 +170,7 @@ class Invitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         Index("ix_invitation_property_status", "property_id", "status"),
         Index("ix_invitation_resident", "resident_user_id", "created_at"),
+        Index("ix_invitation_status_departure", "status", "expected_departure"),
     )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -204,6 +205,7 @@ class Invitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class QRPass(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "qr_passes"
+    __table_args__ = (Index("ix_pass_status_expires", "status", "expires_at"),)
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
@@ -264,6 +266,7 @@ class ParkingReservation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         Index("uq_active_reservation_slot", "slot_id", unique=True, postgresql_where=text("status = 'ACTIVE'")),
         Index("ix_reservation_property_status", "property_id", "status"),
+        Index("ix_reservation_status_until", "status", "reserved_until"),
     )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -405,6 +408,10 @@ class AuditLog(UUIDPrimaryKeyMixin, Base):
 
 class Notification(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notification_outbox", "channel", "status", "next_attempt_at"),
+        Index("ix_notification_user_created", "user_id", "created_at"),
+    )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
@@ -447,6 +454,7 @@ class RealtimeEvent(Base):
     __tablename__ = "realtime_events"
     __table_args__ = (
         Index("ix_realtime_property_sequence", "property_id", "sequence"),
+        Index("ix_realtime_created_at", "created_at"),
     )
 
     sequence: Mapped[int] = mapped_column(

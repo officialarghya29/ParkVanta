@@ -7,7 +7,7 @@
 ![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
 ![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
-![Tests](https://img.shields.io/badge/verified-51%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-53%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
 ![Telemetry](https://img.shields.io/badge/telemetry-Prometheus%20%C2%B7%20heartbeats-16A394?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
 
@@ -21,7 +21,7 @@
 
 > **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
 > approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
-> The repository contains **51 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> The repository contains **53 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
 > offline network transition, plus recorded **read** and **write** load runs. Production onboarding includes a
 > first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, an email
 > outbox worker and SMTP-backed password reset. Access tokens stay in memory; gate actions survive reloads in
@@ -65,7 +65,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 
 | Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Backend verification | **51 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
+| Backend verification | **53 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
 | Frontend verification | **5 passed** | `vitest run` |
 | Browser lifecycle | **1 passed** | Playwright · real Chrome |
 | Read load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
@@ -74,8 +74,8 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 | Contention proof | **18 / 18 allocations · 72 expected conflicts** | 6 free bays · 3 rounds · 0 duplicates |
 | Dependency audit | **0 known advisories** | pip-audit · npm audit · Ruff · Bandit |
 | API surface | **59 paths · 68 operations** | FastAPI OpenAPI introspection |
-| Data model | **25 tables · 5 migrations** | SQLAlchemy metadata |
-| Client bundle | **282.0 kB gzip JS · 7.20 kB gzip CSS** | production Vite build |
+| Data model | **25 tables · 6 migrations** | SQLAlchemy metadata |
+| Initial client bundle | **103.8 kB gzip JS · 6.98 kB gzip CSS** | route-split production build |
 
 </div>
 
@@ -302,7 +302,7 @@ Each gate cycle commits three times and emits events, so its latency is intentio
 read benchmark. The contention figure is the stronger proof: with six free bays, exactly six approvals may win —
 and across 90 attempts, exactly 18 did, with no duplicate active row for any slot.
 
-<img src="docs/assets/chart-verification.png" alt="Verification matrix: 51 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 53 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
 
 ---
 
@@ -337,7 +337,7 @@ cp .env.example .env
 
 docker compose up -d db redis     # PostgreSQL :55432 · Redis :56379
 make install                      # Python 3.12 venv + pinned deps
-make migrate                      # Alembic → 25 tables · 5 migrations
+make migrate                      # Alembic → 25 tables · 6 migrations
 make seed                         # development demo society, 17 bays, accounts
 
 make api                          # API      → http://localhost:8080  (docs: /docs)
@@ -387,7 +387,7 @@ register at `/register`, select their apartment, and remain unverified until an 
 ## Verification
 
 ```bash
-make test                         # 51 backend tests on real PostgreSQL
+make test                         # 53 backend tests on real PostgreSQL
 cd apps/web && npm test           # 5 frontend unit tests
 cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
 cd apps/web && npm run build      # type-check + production bundle
@@ -398,7 +398,7 @@ make lint && make audit           # Ruff, pip-audit and npm audit
 
 | Suite | Command | Result |
 | :--- | :--- | ---: |
-| Backend | `pytest -q` | **51 passed** |
+| Backend | `pytest -q` | **53 passed** |
 | Frontend unit | `npm test` | **5 passed** |
 | Browser E2E | `npm run test:e2e` | **1 passed** |
 | Production build | `npm run build` | **passed** |
@@ -415,7 +415,8 @@ What the backend suite proves:
 - entry confirmation is rejected with `authorization_required` until an online authorization exists;
 - SSE ticket scoping, `text/event-stream` framing, Redis Stream retention and replay from `last_event_id`;
 - offline exit reconciliation, duplicate replay, online-only entry confirmation, clock-skew rejection, and
-explicit property scoping for society-wide accounts.
+explicit property scoping for society-wide accounts;
+- bounded-query tests for invitation pages and analytics, and an initial bundle split by route.
 
 The Playwright scenario drives real Chrome through resident creation and approval → visitor QR → guard verify,
 authorize, confirm entry → **network loss** → queued exit → reconnect and reconciliation → admin overview.
@@ -436,7 +437,7 @@ Raw verification snapshot: [`docs/results/verification.json`](docs/results/verif
 | Scanning | `html5-qrcode` camera + manual token fallback |
 | QR rendering | `qrcode` (client-side, URL payload, no PII) |
 | Infra | Docker · Compose · Nginx · GitHub Actions |
-| Verification | Pytest · HTTPX · Vitest · Playwright · Ruff · pip-audit · Bandit · custom load generators |
+| Verification | Pytest · HTTPX2 · Vitest · Playwright · Ruff · pip-audit · Bandit · custom load generators |
 | AI (roadmap, not deployed) | OpenCV · YOLO · OCR · PyTorch, isolated service |
 
 ## Repository layout
@@ -448,7 +449,7 @@ parkvanta/
 │   │   ├── api/v1/routers/      # public · auth · tenancy · invitations · qr · parking · gate · events · analytics
 │   │   ├── core/                # settings · security · deps · errors · rate limit
 │   │   ├── database/            # engine · sessions · declarative base
-│   │   ├── models/              # 23-table domain model
+│   │   ├── models/              # 25-table domain model
 │   │   ├── schemas/             # request/response contracts
 │   │   ├── services/            # auth · mail · qr · parking · invitations · gate · offline · events
 │   │   ├── workers/             # expiry / overstay sweep

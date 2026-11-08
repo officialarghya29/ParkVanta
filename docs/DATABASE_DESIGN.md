@@ -12,7 +12,7 @@ Audit Logs · Notifications · Society Policies · Refresh Tokens · Password Re
 ```
 
 22 tables are created by the initial migration (`139d935f5774`). The current head adds the offline ledger,
-notification outbox, durable event archive and worker heartbeats: **25 tables across 5 migrations**.
+notification outbox, durable event archive, worker heartbeats and hot-path indexes: **25 tables across 6 migrations**.
 
 ## 2. Key tables
 

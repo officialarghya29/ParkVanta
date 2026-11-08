@@ -1,20 +1,20 @@
 {
   "recorded_at": "2026-11-08",
   "source": "pytest -q, vitest run, playwright test, ruff, pip-audit, bandit, npm audit, FastAPI OpenAPI introspection",
-  "backend_tests": 51,
+  "backend_tests": 53,
   "frontend_tests": 5,
   "e2e_tests": 1,
   "openapi_paths": 59,
   "openapi_operations": 68,
   "db_tables": 25,
-  "migrations": 5,
+  "migrations": 6,
   "concurrency_proofs": 2,
   "failed_tests": 0,
   "build": {
-    "js_kb": 936.27,
-    "js_gzip_kb": 282.01,
-    "css_kb": 37.69,
-    "css_gzip_kb": 7.20
+    "js_kb": 336.90,
+    "js_gzip_kb": 103.79,
+    "css_kb": 36.81,
+    "css_gzip_kb": 6.98
   },
   "audits": {
     "python_vulnerabilities": 0,

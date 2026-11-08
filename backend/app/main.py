@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import secrets
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -9,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -21,6 +23,15 @@ from app.services import event_service, metrics_service
 configure_logging("DEBUG" if settings.debug else "INFO")
 logger = logging.getLogger("parkvanta")
 
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    settings.validate_for_production()
+    event_service.set_event_loop(asyncio.get_running_loop())
+    logger.info("ParkVanta API starting in %s mode", settings.environment)
+    yield
+
+
 app = FastAPI(
     title="ParkVanta API",
     version="0.1.0",
@@ -32,6 +43,7 @@ app = FastAPI(
     openapi_url=f"{settings.api_v1_prefix}/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(
@@ -43,6 +55,9 @@ app.add_middleware(
     expose_headers=[REQUEST_ID_HEADER],
 )
 
+if settings.allowed_host_list != ["*"]:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
+
 
 @app.middleware("http")
 async def _request_id(request: Request, call_next):
@@ -50,13 +65,6 @@ async def _request_id(request: Request, call_next):
         response = await call_next(request)
         response.headers[REQUEST_ID_HEADER] = request_id
         return response
-
-
-@app.on_event("startup")
-async def _startup_checks() -> None:
-    settings.validate_for_production()
-    event_service.set_event_loop(asyncio.get_running_loop())
-    logger.info("ParkVanta API starting in %s mode", settings.environment)
 
 
 @app.exception_handler(AppError)

@@ -11,7 +11,8 @@ Invitations → QR Passes → Entry/Exit Events
 Audit Logs · Notifications · Society Policies · Refresh Tokens · Password Reset Tokens
 ```
 
-22 tables are created by the initial migration (`139d935f5774`).
+22 tables are created by the initial migration (`139d935f5774`). The current head adds the offline ledger,
+notification outbox, durable event archive and worker heartbeats: **25 tables across 5 migrations**.
 
 ## 2. Key tables
 
@@ -35,6 +36,7 @@ Audit Logs · Notifications · Society Policies · Refresh Tokens · Password Re
 | `audit_logs` | Security-critical actions | JSON metadata |
 | `society_policies` | Per-property rules | `property_id` unique |
 | `refresh_tokens` | Rotating sessions | `token_hash` unique |
+| `worker_heartbeats` | Last successful expiry/notification run | `worker` primary key |
 
 ## 3. Critical invariants and how they are enforced
 
@@ -78,6 +80,8 @@ FOR UPDATE OF s SKIP LOCKED;
 
 - Reservation TTL: `reserved_until` set from the invitation's expected departure.
 - Worker `app.workers.expiry` expires passes, reservations and stale pending invitations, and flags overstays.
+- Workers upsert `worker_heartbeats` in the same transaction as their results; `/metrics` and
+  `app.workers.health` read it to detect a stopped scheduler.
 - Every sweep is idempotent: transitions are conditional on current state.
 
 ## 6. Retention

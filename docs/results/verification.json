@@ -1,13 +1,13 @@
 {
   "recorded_at": "2026-11-08",
   "source": "pytest -q, vitest run, playwright test, ruff, pip-audit, bandit, npm audit, FastAPI OpenAPI introspection",
-  "backend_tests": 41,
+  "backend_tests": 45,
   "frontend_tests": 5,
   "e2e_tests": 1,
   "openapi_paths": 59,
   "openapi_operations": 68,
-  "db_tables": 24,
-  "migrations": 4,
+  "db_tables": 25,
+  "migrations": 5,
   "concurrency_proofs": 2,
   "failed_tests": 0,
   "build": {

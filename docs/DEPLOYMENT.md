@@ -30,6 +30,9 @@ Verify: `curl http://localhost:8080/health` and `curl http://localhost:8080/read
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | if required | Relay credentials, stored in the secret manager |
 | `SMTP_USE_TLS` / `SMTP_USE_SSL` | for reset | STARTTLS (587) or implicit TLS (465) |
 | `EVENT_RETENTION_DAYS` | recommended | Durable SSE archive retention; default `30` |
+| `METRICS_TOKEN` | recommended | Bearer token required by `/metrics`; leave empty only on a private network |
+| `OUTBOX_STALE_MINUTES` | recommended | Health limit for the oldest queued email; default `10` |
+| `WORKER_STALE_MINUTES` | recommended | Health limit for worker heartbeat age; default `5` |
 | `SEED_PASSWORD` | dev only | Demo account password; never used by `app.bootstrap` |
 
 Secrets belong in a managed secret store, never in the image or repository.
@@ -64,11 +67,13 @@ Internet → TLS / WAF / ingress
                                  ├── managed PostgreSQL (backups, PITR)
                                  ├── managed Redis
                                  ├── expiry worker (scheduled)
-                                 └── notification outbox worker (scheduled)
+                                 ├── notification outbox worker (scheduled)
+                                 └── worker health check (scheduled)
 ```
 
 Backend image: `backend/Dockerfile` (non-root user, healthcheck). Web image: `apps/web/Dockerfile` (multi-stage
-build → Nginx). A reference reverse-proxy config is in `infrastructure/nginx/parkvanta.conf`.
+build → Nginx). A reference reverse-proxy config is in `infrastructure/nginx/parkvanta.conf`. Prometheus can scrape
+`/metrics` through the ingress; set `METRICS_TOKEN` or restrict that path to the monitoring network.
 
 ## 4. Release procedure
 
@@ -78,7 +83,7 @@ build → Nginx). A reference reverse-proxy config is in `infrastructure/nginx/p
 4. On a fresh database, run `python -m app.bootstrap` once and record the join code.
 5. Deploy the API, web assets and both scheduled workers.
 6. Hit `/health` and `/ready`; confirm a login, one gate verification, one password-reset email and one queued
-   visitor email marked `SENT`.
+   visitor email marked `SENT`. Scrape `/metrics` and run the worker health check after the first worker cycle.
 7. Keep the previous image tag for rollback.
 
 **Rollback:** redeploy the previous image tag. Schema changes must be backward compatible for one release;
@@ -89,13 +94,15 @@ destructive migrations require a separate, planned step.
 ```bash
 python -m app.workers.expiry
 python -m app.workers.notifications
+python -m app.workers.health
 ```
 
-Run both every 60 seconds via cron, a Kubernetes CronJob, or a scheduled container. The expiry sweep expires
-passes/reservations/invitations, flags overstays and purges realtime events older than `EVENT_RETENTION_DAYS`.
-The notification worker drains the email outbox with `FOR UPDATE SKIP LOCKED`, retries SMTP failures and records
-`SENT`, `SKIPPED` or `FAILED`. Both are idempotent and safe to overlap. Alert on any `FAILED` outbox row and on the
-oldest `PENDING` email older than 10 minutes; the triage and requeue queries are in the pilot runbook §6.1.
+Run the two workers every 60 seconds via cron, a Kubernetes CronJob, or a scheduled container. The expiry sweep
+expires passes/reservations/invitations, flags overstays and purges realtime events older than
+`EVENT_RETENTION_DAYS`. The notification worker drains the email outbox with `FOR UPDATE SKIP LOCKED`, retries SMTP
+failures and records `SENT`, `SKIPPED` or `FAILED`. Both write a `worker_heartbeats` row on success and are
+idempotent and safe to overlap. Run the health check every 5 minutes; it exits non-zero on any `FAILED` row, a
+stale `PENDING` email, or a missing/stale heartbeat. Triage and requeue queries are in the pilot runbook §6.1.
 
 ## 6. Backups and recovery
 
@@ -114,10 +121,13 @@ oldest `PENDING` email older than 10 minutes; the triage and requeue queries are
 | Gate denial reasons | `entry_exit_events` + audit log |
 | Overstays | analytics endpoint / worker log |
 | Database saturation | managed metrics |
-| Reservation expiry lag | worker cadence |
+| Reservation expiry lag | worker cadence / heartbeat |
+| Email outbox and worker freshness | `/metrics` scrape |
+| Worker health | `python -m app.workers.health` exit status |
 
 Alerts worth paging on: `/ready` failing, 5xx > 2% for 5 minutes, login failure spike, `no_slot_available`
-spike (capacity or policy problem), and gate authorization errors.
+spike (capacity or policy problem), gate authorization errors, any `FAILED` email row, oldest `PENDING` email over
+10 minutes, or `parkvanta_worker_up == 0`.
 
 ## 8. CI/CD
 

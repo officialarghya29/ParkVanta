@@ -18,7 +18,7 @@ from app.core.time import utcnow
 from app.database.session import session_scope
 from app.models import Notification, User
 from app.models.enums import NotificationChannel, NotificationStatus
-from app.services import mail_service
+from app.services import mail_service, worker_service
 
 logger = logging.getLogger("parkvanta.workers.notifications")
 MAX_ATTEMPTS = 5
@@ -76,6 +76,14 @@ def dispatch_notifications(db: Session, *, now=None, limit: int = 50) -> dict[st
             note.next_attempt_at = None
             result["sent"] += 1
 
+    worker_service.record_heartbeat(
+        db,
+        "notifications",
+        detail=(
+            f"sent={result['sent']} retrying={result['retrying']} "
+            f"skipped={result['skipped']} failed={result['failed']}"
+        ),
+    )
     db.commit()
     return result
 

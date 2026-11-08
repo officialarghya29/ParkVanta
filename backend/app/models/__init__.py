@@ -23,6 +23,7 @@ from app.models.entities import (
     User,
     Vehicle,
     Visitor,
+    WorkerHeartbeat,
 )
 
 __all__ = [
@@ -50,4 +51,5 @@ __all__ = [
     "User",
     "Vehicle",
     "Visitor",
+    "WorkerHeartbeat",
 ]

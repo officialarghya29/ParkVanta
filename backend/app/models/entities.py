@@ -430,6 +430,17 @@ class Notification(UUIDPrimaryKeyMixin, Base):
     )
 
 
+class WorkerHeartbeat(Base):
+    """Last successful run of a scheduled worker, used by health checks and metrics."""
+
+    __tablename__ = "worker_heartbeats"
+
+    worker: Mapped[str] = mapped_column(String(40), primary_key=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_status: Mapped[str] = mapped_column(String(20), default="OK", nullable=False)
+    detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
 class RealtimeEvent(Base):
     """Durable replay archive. Redis Streams remain the live fan-out layer."""
 

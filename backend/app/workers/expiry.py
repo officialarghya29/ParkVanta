@@ -32,7 +32,12 @@ from app.models.enums import (
     ReservationStatus,
     SlotStatus,
 )
-from app.services import event_service, notification_service, parking_service
+from app.services import (
+    event_service,
+    notification_service,
+    parking_service,
+    worker_service,
+)
 
 logger = logging.getLogger("parkvanta.workers.expiry")
 
@@ -138,6 +143,17 @@ def run_expiry_sweep(db: Session) -> dict[str, int]:
         "overstays_flagged": len(overstay_events),
         "realtime_events_purged": purge_realtime_events(db, now),
     }
+    worker_service.record_heartbeat(
+        db,
+        "expiry",
+        detail=(
+            f"passes={result['expired_passes']} "
+            f"reservations={result['expired_reservations']} "
+            f"invitations={result['expired_invitations']} "
+            f"overstays={result['overstays_flagged']} "
+            f"purged={result['realtime_events_purged']}"
+        ),
+    )
     db.commit()
 
     # Publish after commit so subscribers never read pre-transaction state.

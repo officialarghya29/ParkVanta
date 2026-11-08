@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     event_retention_days: int = 30
 
     app_public_url: str = "http://localhost:5173"
+    metrics_token: str = ""
+    outbox_stale_minutes: int = 10
+    worker_stale_minutes: int = 5
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""

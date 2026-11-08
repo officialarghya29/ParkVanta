@@ -208,8 +208,13 @@ Nginx / managed ingress (TLS)
    └── /api → uvicorn (FastAPI, N workers)
                  ├── PostgreSQL (managed, backups, PITR)
                  ├── Redis (rate limits, Streams replay, pub/sub)
-                 └── worker timer (python -m app.workers.expiry)
+                 ├── expiry worker (python -m app.workers.expiry)
+                 ├── notification outbox worker (python -m app.workers.notifications)
+                 └── worker health check (python -m app.workers.health)
 ```
+
+Workers upsert a `worker_heartbeats` row after each successful run. `/metrics` exposes the email-outbox depth and
+heartbeat age in Prometheus format; the health command exits non-zero when the queue or a heartbeat is stale.
 
 ## 7. Deliberate trade-offs
 

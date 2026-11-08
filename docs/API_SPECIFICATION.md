@@ -131,6 +131,20 @@ the archive remains the replay source. Events are advisory: clients refetch REST
 Email delivery rows are intentionally excluded from the in-app list. They are dispatched by
 `python -m app.workers.notifications` and transition `PENDING → SENT | SKIPPED | FAILED` with bounded retries.
 
+## Observability
+
+Operational endpoints sit outside `/api/v1` and are not part of the public API schema.
+
+| Method | Path | Auth | Output |
+| :--- | :--- | :--- | :--- |
+| GET | `/health` | public | liveness |
+| GET | `/ready` | public | database readiness |
+| GET | `/metrics` | optional bearer (`METRICS_TOKEN`) | Prometheus text: outbox rows by status, oldest pending age, worker age/up |
+
+`/metrics` exposes aggregates only — no visitor data, email bodies or credentials. Workers write a
+`worker_heartbeats` row after each successful run; `python -m app.workers.health` fails when the outbox or a
+heartbeat is stale.
+
 ## Verification example
 
 ```bash

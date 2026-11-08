@@ -68,6 +68,7 @@ publicly reachable. The SPA and API share one origin so CORS stays narrow.
 | `APP_PUBLIC_URL` | The pilot HTTPS origin, used in password-reset links |
 | `SMTP_*` | Society mail relay; required for password reset and visitor email |
 | `EVENT_RETENTION_DAYS` | `30` by default; durable SSE replay window |
+| `METRICS_TOKEN` | Optional bearer token for `/metrics`; set unless scraping over a private network |
 | `VITE_API_BASE_URL` | `/api/v1` when served behind the same origin |
 
 The API refuses to start in production with the default development JWT secret.
@@ -108,6 +109,10 @@ docker run -d --name parkvanta-api --env-file /etc/parkvanta/pilot.env \
   python -m app.workers.expiry >> /var/log/parkvanta-expiry.log 2>&1
 * * * * * docker run --rm --env-file /etc/parkvanta/pilot.env parkvanta-api:<sha> \
   python -m app.workers.notifications >> /var/log/parkvanta-notifications.log 2>&1
+
+# 7. Every five minutes, fail loudly if the outbox or a heartbeat is stale
+*/5 * * * * docker run --rm --env-file /etc/parkvanta/pilot.env parkvanta-api:<sha> \
+  python -m app.workers.health >> /var/log/parkvanta-health.log 2>&1
 ```
 
 Serve the built SPA through Nginx, proxy `/api/` to the API, terminate TLS, add HSTS and a strict CSP. Keep the
@@ -180,7 +185,9 @@ pilot log.
 | PostgreSQL | managed metrics | connections > 80%, disk > 80%, replication lag |
 | Redis | managed metrics | unavailable > 5 min (gate writes still work; realtime degrades) |
 | Expiry worker | cron log | last successful run > 5 min |
-| Notification outbox | `notifications` status/error | oldest `PENDING` > 5 min or any `FAILED` |
+| Notification outbox | `notifications` status/error | oldest `PENDING` > 10 min or any `FAILED` |
+| Outbox metrics | `/metrics` scrape | oldest `PENDING` over limit, `FAILED` > 0, or `worker_up == 0` |
+| Worker health | `python -m app.workers.health` | non-zero exit |
 | Backup age | backup directory / object storage | newest dump > 26 h |
 
 Daily checks:
@@ -198,7 +205,8 @@ manual overrides for reason quality.
 ### 6.1 Notification outbox alerts and recovery
 
 Visitor email is queued in `notifications` and only leaves `PENDING` when SMTP accepts or rejects it. In-app notes
-arrive regardless, so a stuck outbox never blocks a gate decision.
+arrive regardless, so a stuck outbox never blocks a gate decision. Each successful worker run updates
+`worker_heartbeats`; `make worker-health` reads it and exits non-zero when the scheduler stops.
 
 | Signal | Query threshold | Page when |
 | :--- | :--- | :--- |

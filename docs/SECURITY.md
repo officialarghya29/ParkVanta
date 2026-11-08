@@ -114,6 +114,13 @@ metadata, and are written in the same transaction as the operation.
 - Society-wide offline exits use the explicit `property_id` from the reconcile request; an account with no
   assigned property is not forced through an invalid assertion.
 
+## 6.4 Metrics endpoint
+
+- `/metrics` exposes aggregate email-outbox counts and worker heartbeat timestamps only; it never returns visitor
+  data, email bodies or credentials.
+- Set `METRICS_TOKEN` to require `Authorization: Bearer <token>`. Without it, restrict the path to the monitoring
+  network at the ingress; the endpoint is excluded from the public OpenAPI schema.
+
 ## 7. Application hardening
 
 - Pydantic validation on every request; SQLAlchemy parameterisation (no string SQL with user input).

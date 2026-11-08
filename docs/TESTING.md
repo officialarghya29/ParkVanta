@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **41 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **45 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -12,8 +12,9 @@
 | Write benchmark | `make load-test-write` | **100 cycles · 18/18 allocations · 0 errors** |
 | Lint | `make lint` | **Ruff clean** |
 | Dependency audits | `make audit` | **0 Python · 0 Node advisories** |
-| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 24 tables · 4 migrations |
+| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 25 tables · 5 migrations |
 | Release gates | CI: bundle budget + Docker image builds | **JS/CSS gzip within budget · images under 450/120 MiB** |
+| Worker health | `make worker-health` | **Exit 1 on stale queue or missing heartbeat** |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
 unique indexes are exercised with production semantics.
@@ -118,6 +119,12 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 - A queued email is delivered over a real local SMTP server, marked `SENT`, and not sent twice.
 - SMTP failure increments attempts and schedules an exponential retry without losing the in-app note.
 - Missing SMTP marks the delivery `SKIPPED` rather than falsely claiming success.
+
+**Worker health and metrics** (`test_workers.py`)
+- The expiry sweep deletes archived events past `EVENT_RETENTION_DAYS` and keeps newer frames.
+- An overstay is flagged once and queues both an in-app note and a pending email.
+- The health command fails on a stale outbox, then passes after the worker marks mail `SKIPPED`.
+- `/metrics` exposes outbox counts and worker age/up, and enforces the configured bearer token.
 
 **Offline reconciliation** (`test_offline.py`)
 - An offline exit releases the occupancy once; replaying the same client event is reported as a duplicate and

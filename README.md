@@ -7,7 +7,7 @@
 ![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
 ![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
-![Tests](https://img.shields.io/badge/verified-41%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-45%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
 
 **Visitor verification · residential parking allocation · smart gate operations**
@@ -20,7 +20,7 @@
 
 > **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
 > approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
-> The repository contains **41 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> The repository contains **45 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
 > offline network transition, plus recorded **read** and **write** load runs. Production onboarding includes a
 > first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, an email
 > outbox worker and SMTP-backed password reset. Access tokens stay in memory; gate actions survive reloads in
@@ -47,7 +47,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 
 | Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Backend verification | **41 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
+| Backend verification | **45 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
 | Frontend verification | **5 passed** | `vitest run` |
 | Browser lifecycle | **1 passed** | Playwright · real Chrome |
 | Read load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
@@ -56,7 +56,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 | Contention proof | **18 / 18 allocations · 72 expected conflicts** | 6 free bays · 3 rounds · 0 duplicates |
 | Dependency audit | **0 known advisories** | pip-audit · npm audit · Ruff · Bandit |
 | API surface | **59 paths · 68 operations** | FastAPI OpenAPI introspection |
-| Data model | **24 tables · 4 migrations** | SQLAlchemy metadata |
+| Data model | **25 tables · 5 migrations** | SQLAlchemy metadata |
 | Client bundle | **282.0 kB gzip JS · 7.20 kB gzip CSS** | production Vite build |
 
 </div>
@@ -284,7 +284,7 @@ Each gate cycle commits three times and emits events, so its latency is intentio
 read benchmark. The contention figure is the stronger proof: with six free bays, exactly six approvals may win —
 and across 90 attempts, exactly 18 did, with no duplicate active row for any slot.
 
-<img src="docs/assets/chart-verification.png" alt="Verification matrix: 41 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 45 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
 
 ---
 
@@ -319,14 +319,16 @@ cp .env.example .env
 
 docker compose up -d db redis     # PostgreSQL :55432 · Redis :56379
 make install                      # Python 3.12 venv + pinned deps
-make migrate                      # Alembic → 24 tables · 4 migrations
+make migrate                      # Alembic → 25 tables · 5 migrations
 make seed                         # development demo society, 17 bays, accounts
 
 make api                          # API      → http://localhost:8080  (docs: /docs)
 make web-install && make web      # Frontend → http://localhost:5173
 ```
 
-Health checks: `curl localhost:8080/health` · `curl localhost:8080/ready`.
+Health checks: `curl localhost:8080/health` · `curl localhost:8080/ready` · `curl localhost:8080/metrics`
+(Prometheus; set `METRICS_TOKEN` to require a bearer token). `make worker-health` exits non-zero when the
+email outbox or a worker heartbeat is stale.
 
 ### Demo accounts
 
@@ -367,7 +369,7 @@ register at `/register`, select their apartment, and remain unverified until an 
 ## Verification
 
 ```bash
-make test                         # 41 backend tests on real PostgreSQL
+make test                         # 45 backend tests on real PostgreSQL
 cd apps/web && npm test           # 5 frontend unit tests
 cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
 cd apps/web && npm run build      # type-check + production bundle
@@ -378,7 +380,7 @@ make lint && make audit           # Ruff, pip-audit and npm audit
 
 | Suite | Command | Result |
 | :--- | :--- | ---: |
-| Backend | `pytest -q` | **41 passed** |
+| Backend | `pytest -q` | **45 passed** |
 | Frontend unit | `npm test` | **5 passed** |
 | Browser E2E | `npm run test:e2e` | **1 passed** |
 | Production build | `npm run build` | **passed** |
@@ -485,6 +487,7 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 - Password reset uses a single-use hashed token and configured SMTP; production returns 503 if delivery is absent.
 - Access tokens stay in JavaScript memory; the httpOnly refresh cookie restores the session after reload.
 - Realtime frames are archived in PostgreSQL before fan-out, with configurable retention and sequence replay.
+- Prometheus metrics expose outbox depth and worker freshness without visitor PII; scraping can require a bearer token.
 - Visitor email uses a status-tracked outbox with bounded retries; no delivery is claimed before SMTP accepts it.
 - No PII in QR payloads; visitor-safe pass projection; no facial recognition.
 - The application refuses to boot in production with the default development JWT secret.
@@ -515,6 +518,7 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 - [x] **17c** Dependency CVE gate, lint gate and mixed write-path benchmark
 - [x] **17d** Production bootstrap, join-code onboarding, resident verification, notification inbox and SMTP reset
 - [x] **17e** Durable event archive, email outbox worker, in-memory tokens and IndexedDB gate queue
+- [x] **17f** Durable worker heartbeats, Prometheus outbox metrics and a stale-queue health command
 - [ ] **18** ParkVanta Vision (ANPR + occupancy) with an evaluation protocol
 - [x] **19a** Single-property pilot runbook with backup, restore and monitoring procedures
 - [ ] **19** Pilot at one property and production hardening

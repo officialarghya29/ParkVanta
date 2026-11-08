@@ -1,11 +1,12 @@
 import asyncio
 import logging
+import secrets
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -13,8 +14,8 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging
-from app.database.session import engine
-from app.services import event_service
+from app.database.session import SessionLocal, engine
+from app.services import event_service, metrics_service
 
 configure_logging("DEBUG" if settings.debug else "INFO")
 logger = logging.getLogger("parkvanta")
@@ -112,6 +113,20 @@ def ready() -> dict:
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
     return {"status": "ready", "database": "ok"}
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(request: Request) -> PlainTextResponse:
+    """Prometheus scrape endpoint for outbox depth and worker freshness."""
+    if settings.metrics_token:
+        expected = f"Bearer {settings.metrics_token}"
+        if not secrets.compare_digest(request.headers.get("authorization", ""), expected):
+            return PlainTextResponse("unauthorized\n", status_code=401)
+    with SessionLocal() as db:
+        body = metrics_service.render_metrics(db)
+    return PlainTextResponse(
+        body, media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
 
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)

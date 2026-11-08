@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **46 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **49 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -17,7 +17,8 @@
 | Worker health | `make worker-health` | **Exit 1 on stale queue or missing heartbeat** |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
-unique indexes are exercised with production semantics.
+unique indexes are exercised with production semantics. API tests also assert request-id generation and safe echo
+(`test_request_context.py`).
 
 ## 1.1 Recorded load run
 
@@ -127,6 +128,10 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 - `/metrics` exposes outbox counts and worker age/up, and enforces the configured bearer token.
 - Two overlapping worker sessions upsert exactly one heartbeat row without a unique-key violation.
 
+**Vision release gate** (`test_vision_evaluation.py`)
+- A valid manifest scores full-plate and occupancy accuracy, normalizes separators and exits 0 when it passes.
+- A failing manifest flags a high-confidence wrong plate and exits 1; per-condition slices are reported.
+
 **Offline reconciliation** (`test_offline.py`)
 - An offline exit releases the occupancy once; replaying the same client event is reported as a duplicate and
   produces no second release or audit row.
@@ -183,7 +188,7 @@ The production build type-checks the entire client (`tsc --noEmit`).
 
 | Area | Status |
 | :--- | :--- |
-| Vision accuracy suite | Blocked on Stage 13 |
+| Vision model accuracy | Protocol and gate implemented; no model is deployed to score |
 | Live SMTP relay | A worker test delivers through a local SMTP server; failure paths inject relay errors. The pilot relay must be configured and tested |
 | SMS / WhatsApp delivery | Email and in-app delivery are implemented; SMS/WhatsApp providers are not |
 

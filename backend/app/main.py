@@ -14,6 +14,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging
+from app.core.request_context import REQUEST_ID_HEADER, bind_request_id
 from app.database.session import SessionLocal, engine
 from app.services import event_service, metrics_service
 
@@ -38,8 +39,17 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER],
+    expose_headers=[REQUEST_ID_HEADER],
 )
+
+
+@app.middleware("http")
+async def _request_id(request: Request, call_next):
+    with bind_request_id(request.headers.get(REQUEST_ID_HEADER)) as request_id:
+        response = await call_next(request)
+        response.headers[REQUEST_ID_HEADER] = request_id
+        return response
 
 
 @app.on_event("startup")

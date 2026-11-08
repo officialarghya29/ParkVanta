@@ -7,7 +7,8 @@
 ![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
 ![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
-![Tests](https://img.shields.io/badge/verified-46%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-49%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Telemetry](https://img.shields.io/badge/telemetry-Prometheus%20%C2%B7%20heartbeats-16A394?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
 
 **Visitor verification · residential parking allocation · smart gate operations**
@@ -20,12 +21,29 @@
 
 > **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
 > approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
-> The repository contains **46 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> The repository contains **49 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
 > offline network transition, plus recorded **read** and **write** load runs. Production onboarding includes a
 > first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, an email
 > outbox worker and SMTP-backed password reset. Access tokens stay in memory; gate actions survive reloads in
 > IndexedDB; SSE replay is backed by a 30-day PostgreSQL archive. Deferred work is listed in
 > [Known limitations](#known-limitations); nothing here is labelled live unless a test or endpoint proves it.
+
+---
+
+## The horizon
+
+ParkVanta is a **transactional operating system for the gate**, and the long arc is deliberately staged. The ledger
+comes first; perception is a later, advisory layer that can never open a barrier on its own.
+
+| Stage | State | What it means |
+| :--- | :--- | :--- |
+| **OBSERVE** | Live | Every authorization, entry, exit, override and slot transition is an immutable, tenant-scoped event. |
+| **ADVISE** | Protocol ready | ANPR and occupancy predictions can be scored offline, condition by condition, before a camera is connected. |
+| **AUTOMATE** | Gated | A model reaches a gate only after its manifest passes the release gate; a human decision stays mandatory. |
+| **OPERATE** | External | A live single-property pilot needs a real site, real guards and a signed runbook — it is not simulated here. |
+
+The system degrades in one direction: if Redis, SSE, email or vision disappears, PostgreSQL and the guard's
+decision remain authoritative. That is the stability contract behind every futuristic surface in this repository.
 
 ---
 
@@ -47,7 +65,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 
 | Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Backend verification | **46 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
+| Backend verification | **49 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
 | Frontend verification | **5 passed** | `vitest run` |
 | Browser lifecycle | **1 passed** | Playwright · real Chrome |
 | Read load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
@@ -284,7 +302,7 @@ Each gate cycle commits three times and emits events, so its latency is intentio
 read benchmark. The contention figure is the stronger proof: with six free bays, exactly six approvals may win —
 and across 90 attempts, exactly 18 did, with no duplicate active row for any slot.
 
-<img src="docs/assets/chart-verification.png" alt="Verification matrix: 46 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 49 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
 
 ---
 
@@ -369,7 +387,7 @@ register at `/register`, select their apartment, and remain unverified until an 
 ## Verification
 
 ```bash
-make test                         # 46 backend tests on real PostgreSQL
+make test                         # 49 backend tests on real PostgreSQL
 cd apps/web && npm test           # 5 frontend unit tests
 cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
 cd apps/web && npm run build      # type-check + production bundle
@@ -380,7 +398,7 @@ make lint && make audit           # Ruff, pip-audit and npm audit
 
 | Suite | Command | Result |
 | :--- | :--- | ---: |
-| Backend | `pytest -q` | **46 passed** |
+| Backend | `pytest -q` | **49 passed** |
 | Frontend unit | `npm test` | **5 passed** |
 | Browser E2E | `npm run test:e2e` | **1 passed** |
 | Production build | `npm run build` | **passed** |
@@ -507,7 +525,7 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 | Offline queue is device-local (IndexedDB) | Clearing site data or losing the device drops unsynced exits | Service-worker background sync + server-side export/import |
 | Visitor email needs the outbox worker | If the worker stops, email stays `PENDING`; in-app notes still arrive | Managed scheduler, alert on pending age, provider failover |
 | SMS/WhatsApp outbound is not implemented | Visitor updates are in-app + email only | Provider adapters with consent and delivery receipts |
-| Vision AI not deployed | No ANPR/occupancy inference | Stage 13 with measured accuracy |
+| Vision AI not deployed | No ANPR/occupancy inference | Score a candidate with the offline gate in `docs/VISION_EVALUATION.md`; deploy only after it passes |
 
 ## Roadmap
 
@@ -520,9 +538,11 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 - [x] **17d** Production bootstrap, join-code onboarding, resident verification, notification inbox and SMTP reset
 - [x] **17e** Durable event archive, email outbox worker, in-memory tokens and IndexedDB gate queue
 - [x] **17f** Durable worker heartbeats, Prometheus outbox metrics and a stale-queue health command
-- [ ] **18** ParkVanta Vision (ANPR + occupancy) with an evaluation protocol
+- [x] **18a** Vision evaluation protocol, manifest validator and offline release gate
+- [ ] **18b** Deploy an ANPR/occupancy model after it passes the gate on a labelled pilot dataset
 - [x] **19a** Single-property pilot runbook with backup, restore and monitoring procedures
-- [ ] **19** Pilot at one property and production hardening
+- [x] **19b** Production hardening: request correlation ids, Prometheus metrics, worker heartbeats, health checks
+- [ ] **19c** Live single-property pilot (requires a real site, guards and a signed runbook)
 
 ## Documentation
 
@@ -535,6 +555,7 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 | [`docs/API_SPECIFICATION.md`](docs/API_SPECIFICATION.md) | Endpoints, roles, errors, examples |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, RBAC matrix, QR, offline and privacy controls |
 | [`docs/AI_DESIGN.md`](docs/AI_DESIGN.md) | Vision pipeline, confidence policy, evaluation |
+| [`docs/VISION_EVALUATION.md`](docs/VISION_EVALUATION.md) | Executable offline gate for ANPR and occupancy predictions |
 | [`docs/TESTING.md`](docs/TESTING.md) | Test report, benchmark, manual acceptance script |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Environments, release, backups, monitoring |
 | [`docs/PILOT_RUNBOOK.md`](docs/PILOT_RUNBOOK.md) | Single-property pilot, backup/restore and incident runbook |

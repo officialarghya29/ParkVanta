@@ -1,6 +1,7 @@
 # ParkVanta — AI & Computer Vision Design
 
-**Status:** architecture specified; runtime **not deployed**. The product is fully functional without it.
+**Status:** architecture specified; the offline evaluation protocol is implemented; the runtime is **not
+deployed**. The product is fully functional without it.
 
 ## 1. Principle
 
@@ -52,6 +53,10 @@ calibration, and latency (p50/p95) per condition. Do not claim production readin
 
 Acceptance for pilot use: full-plate accuracy ≥ 97% on the daylight set, ≥ 92% at night, p95 latency ≤ 2.5 s,
 and zero cases where a low-confidence read is presented as certain.
+
+The protocol is executable: `python -m app.vision <manifest.json>` validates exported predictions and applies the
+gate. See [`VISION_EVALUATION.md`](VISION_EVALUATION.md). A passing manifest is evidence for that dataset, not
+permission to skip a pilot.
 
 ## 6. Data handling
 

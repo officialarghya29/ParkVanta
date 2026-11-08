@@ -57,7 +57,7 @@ Existing tools stop at visitor approval. **Parking is the hard part**, and ParkV
 | Facial recognition | Permanently out of scope |
 | Payments / billing | Subscription model not yet defined |
 | Automatic boom barrier control | Requires hardware integration and policy approval |
-| Number-plate recognition | Service designed, models not deployed (Stage 13) |
+| Number-plate recognition | Offline evaluation protocol implemented; model not deployed |
 | Native iOS/Android apps | PWA validated first |
 | Visitor SMS / WhatsApp delivery | Email uses the outbox worker; SMS/WhatsApp providers are not implemented |
 

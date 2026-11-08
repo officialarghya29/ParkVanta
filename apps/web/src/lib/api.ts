@@ -3,8 +3,6 @@ import type { LoginResponse, User } from "./types";
 export const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:8080/api/v1";
 
-const STORAGE_KEY = "parkvanta.session";
-
 export interface Session {
   accessToken: string;
   user: User;
@@ -24,16 +22,8 @@ export class RequestError extends Error {
   }
 }
 
-function readSession(): Session | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Session) : null;
-  } catch {
-    return null;
-  }
-}
-
-let session: Session | null = readSession();
+let session: Session | null = null;
+let refreshPromise: Promise<Session | null> | null = null;
 
 export function getSession(): Session | null {
   return session;
@@ -41,12 +31,15 @@ export function getSession(): Session | null {
 
 export function saveSession(next: Session): void {
   session = next;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
 }
 
 export function clearSession(): void {
   session = null;
-  localStorage.removeItem(STORAGE_KEY);
+}
+
+export async function restoreSession(): Promise<Session | null> {
+  if (session) return session;
+  return tryRefresh();
 }
 
 export function setSessionFromLogin(payload: LoginResponse): Session {
@@ -56,19 +49,33 @@ export function setSessionFromLogin(payload: LoginResponse): Session {
 }
 
 async function tryRefresh(): Promise<Session | null> {
-  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
-  if (!response.ok) {
-    clearSession();
-    return null;
+  if (refreshPromise) return refreshPromise;
+  const pending = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!response.ok) {
+        clearSession();
+        return null;
+      }
+      const payload = (await response.json()) as LoginResponse;
+      saveSession({ accessToken: payload.access_token, user: payload.user });
+      return session;
+    } catch {
+      clearSession();
+      return null;
+    }
+  })();
+  refreshPromise = pending;
+  try {
+    return await pending;
+  } finally {
+    if (refreshPromise === pending) refreshPromise = null;
   }
-  const payload = (await response.json()) as LoginResponse;
-  saveSession({ accessToken: payload.access_token, user: payload.user });
-  return session;
 }
 
 type ApiOptions = Omit<RequestInit, "body"> & { json?: unknown; body?: BodyInit | null };

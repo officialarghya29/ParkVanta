@@ -11,12 +11,20 @@ current state, so a second runner cannot double-release a slot.
 import logging
 from datetime import timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.time import utcnow
 from app.database.session import session_scope
-from app.models import Invitation, ParkingOccupancy, ParkingReservation, ParkingSlot, QRPass
+from app.models import (
+    Invitation,
+    ParkingOccupancy,
+    ParkingReservation,
+    ParkingSlot,
+    QRPass,
+    RealtimeEvent,
+)
 from app.models.enums import (
     InvitationStatus,
     OccupancyStatus,
@@ -114,6 +122,12 @@ def flag_overstays(db: Session, now) -> list[tuple]:
     return flagged
 
 
+def purge_realtime_events(db: Session, now) -> int:
+    cutoff = now - timedelta(days=settings.event_retention_days)
+    result = db.execute(delete(RealtimeEvent).where(RealtimeEvent.created_at < cutoff))
+    return int(result.rowcount or 0)
+
+
 def run_expiry_sweep(db: Session) -> dict[str, int]:
     now = utcnow()
     overstay_events = flag_overstays(db, now)
@@ -122,6 +136,7 @@ def run_expiry_sweep(db: Session) -> dict[str, int]:
         "expired_reservations": expire_reservations(db, now),
         "expired_invitations": expire_pending_invitations(db, now),
         "overstays_flagged": len(overstay_events),
+        "realtime_events_purged": purge_realtime_events(db, now),
     }
     db.commit()
 

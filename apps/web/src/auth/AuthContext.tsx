@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { api, clearSession, getSession, setSessionFromLogin } from "../lib/api";
+import { api, clearSession, restoreSession, setSessionFromLogin } from "../lib/api";
 import type { LoginResponse, Role, User } from "../lib/types";
 
 interface AuthValue {
@@ -24,8 +24,22 @@ export function homeRouteFor(role: Role): string {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => getSession()?.user ?? null);
-  const [loading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void restoreSession()
+      .then((restored) => {
+        if (active) setUser(restored?.user ?? null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const response = await api<LoginResponse>("/auth/login", {

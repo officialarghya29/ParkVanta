@@ -1,15 +1,13 @@
-"""Advisory realtime events.
+"""Advisory realtime events with durable replay.
 
-Events are notifications, never authority. A client that receives an event
-re-reads state through the REST API; if the stream is unavailable the UI keeps
-polling. Redis carries events between processes and keeps a bounded replay
-window in a Stream; without Redis a single-process in-memory broker degrades
-gracefully (live only).
+Every event is archived in PostgreSQL before it is published to Redis. Redis
+Streams remain the low-latency fan-out and short retained window; the archive
+is the replay source when a client has been disconnected beyond that window.
+Events are notifications, never authority: clients refetch REST state.
 
-Frame ids are Redis Stream ids, so a reconnecting EventSource can resume with
-`Last-Event-ID` and receive the frames it missed. Clients may also pass
-`?last_event_id=` because the browser client mints a fresh EventSource when the
-short-lived stream ticket is renewed.
+Frame ids are archive sequence numbers. A reconnecting EventSource sends
+`Last-Event-ID`, the stream replays archived events after that sequence, then
+tails Redis. Without Redis, the in-process broker still carries live frames.
 """
 
 from __future__ import annotations
@@ -17,19 +15,21 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from collections import defaultdict
 from typing import Any, AsyncIterator
 from uuid import UUID, uuid4
 
+from sqlalchemy import func, select
+
 from app.core.cache import get_redis_client
 from app.core.config import settings
 from app.core.time import utcnow
+from app.database.session import SessionLocal
+from app.models import RealtimeEvent
 
 logger = logging.getLogger("parkvanta.events")
 
 STREAM_MAXLEN = 500
-_STREAM_ID = re.compile(r"^\d{1,20}-\d{1,20}$")
 
 _local_subscribers: dict[str, set[asyncio.Queue[str]]] = defaultdict(set)
 _loop: asyncio.AbstractEventLoop | None = None
@@ -51,11 +51,26 @@ def stream_key(property_id: UUID | str) -> str:
     return f"pv:stream:{property_id}"
 
 
-def publish_event(event_type: str, *, property_id: UUID, data: dict | None = None) -> str | None:
-    """Publish a property-scoped event. Safe to call from sync request paths.
+def _archive_event(event: dict, property_id: UUID) -> int | None:
+    try:
+        with SessionLocal() as db:
+            row = RealtimeEvent(
+                property_id=property_id,
+                event_type=event["type"],
+                payload=event,
+                occurred_at=utcnow(),
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return int(row.sequence)
+    except Exception as exc:  # pragma: no cover - environment dependent
+        logger.warning("Event archive write failed: %s", exc)
+        return None
 
-    Returns the Redis Stream id when Redis accepted the event, otherwise None.
-    """
+
+def publish_event(event_type: str, *, property_id: UUID, data: dict | None = None) -> str | None:
+    """Archive and publish a property-scoped event. Returns its archive sequence."""
     event = {
         "id": str(uuid4()),
         "type": event_type,
@@ -63,6 +78,9 @@ def publish_event(event_type: str, *, property_id: UUID, data: dict | None = Non
         "occurred_at": utcnow().isoformat(),
         "data": data or {},
     }
+    sequence = _archive_event(event, property_id)
+    if sequence is not None:
+        event["sequence"] = sequence
     payload = json.dumps(event, default=str)
 
     client = get_redis_client()
@@ -76,13 +94,44 @@ def publish_event(event_type: str, *, property_id: UUID, data: dict | None = Non
                 approximate=True,
             )
             pipe.publish(channel_for(property_id), payload)
-            results = pipe.execute()
-            return str(results[0]) if results else None
+            pipe.execute()
+            return str(sequence) if sequence is not None else None
         except Exception as exc:  # pragma: no cover - depends on environment
             logger.warning("Redis publish failed, using local broker: %s", exc)
 
     _deliver_local(str(property_id), payload)
-    return None
+    return str(sequence) if sequence is not None else None
+
+
+def archived_events(property_id: UUID, after_sequence: int = 0) -> list[dict]:
+    """Return durable events after a sequence, oldest first."""
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(RealtimeEvent)
+            .where(
+                RealtimeEvent.property_id == property_id,
+                RealtimeEvent.sequence > after_sequence,
+            )
+            .order_by(RealtimeEvent.sequence)
+        )
+        events: list[dict] = []
+        for row in rows:
+            payload = dict(row.payload or {})
+            payload["sequence"] = int(row.sequence)
+            events.append(payload)
+        return events
+
+
+def latest_sequence(property_id: UUID) -> int:
+    with SessionLocal() as db:
+        return int(
+            db.scalar(
+                select(func.max(RealtimeEvent.sequence)).where(
+                    RealtimeEvent.property_id == property_id
+                )
+            )
+            or 0
+        )
 
 
 def _deliver_local(property_id: str, payload: str) -> None:
@@ -106,26 +155,28 @@ def _format_frame(payload: str, frame_id: str | None = None) -> str:
         event = json.loads(payload)
     except json.JSONDecodeError:
         return f"data: {payload}\n\n"
+    sequence = event.get("sequence")
     return (
-        f"id: {frame_id or event.get('id', '')}\n"
+        f"id: {frame_id or sequence or event.get('id', '')}\n"
         f"event: {event.get('type', 'message')}\n"
         f"data: {payload}\n\n"
     )
 
 
-def _cursor_after(last_event_id: str | None) -> str:
-    """Resume after a real stream id; otherwise only tail new events."""
-    if last_event_id and _STREAM_ID.match(last_event_id.strip()):
-        return last_event_id.strip()
-    return "$"
+def _parse_last_sequence(last_event_id: str | None) -> int | None:
+    if last_event_id is None:
+        return None
+    try:
+        value = int(last_event_id.strip())
+    except (TypeError, ValueError):
+        return None
+    return max(0, value)
 
 
 async def _get_async_client() -> Any:
     global _async_client, _async_checked, _async_loop
     loop = asyncio.get_running_loop()
     if _async_checked and _async_loop is not loop:
-        # A Redis asyncio client is bound to the loop that created it. Tests and
-        # worker runtimes may create more than one loop per process.
         _async_client = None
         _async_checked = False
     if _async_checked:
@@ -149,16 +200,20 @@ async def _get_async_client() -> Any:
 async def event_stream(
     property_id: UUID, last_event_id: str | None = None
 ) -> AsyncIterator[str]:
-    """Yield SSE frames for one property until the client disconnects.
-
-    Uses XREAD on the property Stream, which replays retained frames after
-    `last_event_id` and then tails live events in order.
-    """
+    """Yield SSE frames, replaying the durable archive before tailing live events."""
     yield ": connected\n\n"
+
+    last_sequence = _parse_last_sequence(last_event_id)
+    if last_sequence is not None:
+        for event in await asyncio.to_thread(archived_events, property_id, last_sequence):
+            last_sequence = int(event.get("sequence", last_sequence))
+            yield _format_frame(json.dumps(event, default=str), str(last_sequence))
+    else:
+        last_sequence = await asyncio.to_thread(latest_sequence, property_id)
 
     client = await _get_async_client()
     if client is not None:
-        cursor = _cursor_after(last_event_id)
+        cursor = "0-0"
         key = stream_key(property_id)
         try:
             while True:
@@ -170,13 +225,23 @@ async def event_stream(
                     for message_id, fields in messages:
                         cursor = message_id
                         payload = fields.get("payload") if isinstance(fields, dict) else None
-                        if payload:
-                            yield _format_frame(payload, message_id)
+                        if not payload:
+                            continue
+                        try:
+                            event = json.loads(payload)
+                        except json.JSONDecodeError:
+                            continue
+                        sequence = event.get("sequence")
+                        if sequence is not None:
+                            sequence = int(sequence)
+                            if sequence <= last_sequence:
+                                continue
+                            last_sequence = sequence
+                        yield _format_frame(payload)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # pragma: no cover - environment dependent
             logger.warning("Redis stream read failed, degrading to local broker: %s", exc)
-        # Fall through to the in-process broker rather than dropping the client.
         async for frame in _local_stream(property_id):
             yield frame
         return

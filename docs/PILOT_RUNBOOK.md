@@ -46,8 +46,9 @@ Internet
         ├── static SPA (immutable assets, Nginx)
         └── /api/* → uvicorn (2 workers)
                        ├── PostgreSQL 16 (authoritative, PITR)
-                       ├── Redis 7 (limits, Streams, pub/sub)
-                       └── expiry worker (every 60 s)
+                       ├── Redis 7 (limits, live Streams, pub/sub)
+                       ├── expiry worker (every 60 s)
+                       └── notification outbox worker (every 60 s)
 ```
 
 Single host is acceptable for a controlled pilot if backups leave the host. PostgreSQL and Redis must not be
@@ -65,7 +66,8 @@ publicly reachable. The SPA and API share one origin so CORS stays narrow.
 | `REDIS_URL` | Private Redis URL; no public port |
 | `CORS_ORIGINS` | Exactly the pilot HTTPS origin |
 | `APP_PUBLIC_URL` | The pilot HTTPS origin, used in password-reset links |
-| `SMTP_*` | Society mail relay; required for self-service password reset |
+| `SMTP_*` | Society mail relay; required for password reset and visitor email |
+| `EVENT_RETENTION_DAYS` | `30` by default; durable SSE replay window |
 | `VITE_API_BASE_URL` | `/api/v1` when served behind the same origin |
 
 The API refuses to start in production with the default development JWT secret.
@@ -101,9 +103,11 @@ docker run -d --name parkvanta-api --env-file /etc/parkvanta/pilot.env \
   -p 127.0.0.1:8000:8000 parkvanta-api:<sha> \
   uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 
-# 6. Schedule the expiry worker every minute
+# 6. Schedule the expiry and notification workers every minute
 * * * * * docker run --rm --env-file /etc/parkvanta/pilot.env parkvanta-api:<sha> \
   python -m app.workers.expiry >> /var/log/parkvanta-expiry.log 2>&1
+* * * * * docker run --rm --env-file /etc/parkvanta/pilot.env parkvanta-api:<sha> \
+  python -m app.workers.notifications >> /var/log/parkvanta-notifications.log 2>&1
 ```
 
 Serve the built SPA through Nginx, proxy `/api/` to the API, terminate TLS, add HSTS and a strict CSP. Keep the
@@ -176,6 +180,7 @@ pilot log.
 | PostgreSQL | managed metrics | connections > 80%, disk > 80%, replication lag |
 | Redis | managed metrics | unavailable > 5 min (gate writes still work; realtime degrades) |
 | Expiry worker | cron log | last successful run > 5 min |
+| Notification outbox | `notifications` status/error | oldest `PENDING` > 5 min or any `FAILED` |
 | Backup age | backup directory / object storage | newest dump > 26 h |
 
 Daily checks:

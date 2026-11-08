@@ -109,10 +109,11 @@ Event types: `invitation.created`, `invitation.approved`, `invitation.rejected`,
 `gate.entry_denied`, `parking.updated`, `parking.overstay`. Frames carry `id`, `type`, `property_id`,
 `occurred_at` and a small `data` object (ids and slot codes, never visitor PII).
 
-Frames are appended to the Redis Stream `pv:stream:<property_id>` (bounded to 500 frames) and published on
-`pv:events:<property_id>`. The stream is read with `XREAD`; passing the last frame id replays retained frames
-in order before tailing live events. Without Redis the API falls back to a single-process live broker with no
-replay. Events remain advisory: clients refetch REST after receipt and after reconnect.
+Every event is first stored in the `realtime_events` archive (PostgreSQL, 30-day default retention), then
+appended to the Redis Stream `pv:stream:<property_id>` (bounded to 500 live frames) and published on
+`pv:events:<property_id>`. Frame ids are archive sequence numbers. Passing `last_event_id` replays archived
+events after that sequence, then tails Redis. Without Redis, live frames still flow through the in-process broker;
+the archive remains the replay source. Events are advisory: clients refetch REST after receipt and reconnect.
 
 ## Analytics
 
@@ -122,10 +123,13 @@ replay. Events remain advisory: clients refetch REST after receipt and after rec
 | GET | `/analytics/parking-utilization` | per zone category |
 | GET | `/analytics/visitor-trends?days=` | invitations, entries, exits per day |
 | GET | `/analytics/overstays` | active occupancies past departure |
-| GET | `/notifications?unread_only=&limit=&offset=` | current user's in-app notifications |
+| GET | `/notifications?unread_only=&limit=&offset=&channel=` | current user's notifications (defaults to `IN_APP`) |
 | GET | `/notifications/unread-count` | unread badge count |
 | POST | `/notifications/{id}/read` | mark one owned notification read |
-| POST | `/notifications/read-all` | mark every owned notification read |
+| POST | `/notifications/read-all` | mark every owned in-app notification read |
+
+Email delivery rows are intentionally excluded from the in-app list. They are dispatched by
+`python -m app.workers.notifications` and transition `PENDING → SENT | SKIPPED | FAILED` with bounded retries.
 
 ## Verification example
 

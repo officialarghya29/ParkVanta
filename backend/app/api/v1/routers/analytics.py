@@ -10,7 +10,7 @@ from app.core.errors import NotFoundError, ValidationError
 from app.core.time import utcnow
 from app.database.session import get_db
 from app.models import Notification, User
-from app.models.enums import Role
+from app.models.enums import NotificationChannel, Role
 from app.schemas.analytics import (
     NotificationOut,
     OverstayRow,
@@ -93,8 +93,11 @@ def my_notifications(
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     unread_only: bool = Query(default=False),
+    channel: str = Query(default=NotificationChannel.IN_APP.value, max_length=20),
 ) -> Page[NotificationOut]:
     base = select(Notification).where(Notification.user_id == user.id)
+    if channel.upper() != "ALL":
+        base = base.where(Notification.channel == channel.upper())
     if unread_only:
         base = base.where(Notification.read_at.is_(None))
     total = int(db.scalar(select(func.count()).select_from(base.subquery())) or 0)
@@ -114,7 +117,9 @@ def unread_notification_count(
     count = int(
         db.scalar(
             select(func.count(Notification.id)).where(
-                Notification.user_id == user.id, Notification.read_at.is_(None)
+                Notification.user_id == user.id,
+                Notification.channel == NotificationChannel.IN_APP.value,
+                Notification.read_at.is_(None),
             )
         )
         or 0
@@ -129,7 +134,11 @@ def mark_notification_read(
     user: Annotated[User, Depends(get_current_user)],
 ) -> NotificationOut:
     note = db.get(Notification, notification_id)
-    if note is None or note.user_id != user.id:
+    if (
+        note is None
+        or note.user_id != user.id
+        or note.channel != NotificationChannel.IN_APP.value
+    ):
         raise NotFoundError("Notification not found")
     if note.read_at is None:
         note.read_at = utcnow()
@@ -145,7 +154,11 @@ def mark_all_notifications_read(
 ) -> Message:
     result = db.execute(
         update(Notification)
-        .where(Notification.user_id == user.id, Notification.read_at.is_(None))
+        .where(
+            Notification.user_id == user.id,
+            Notification.channel == NotificationChannel.IN_APP.value,
+            Notification.read_at.is_(None),
+        )
         .values(read_at=utcnow())
     )
     db.commit()

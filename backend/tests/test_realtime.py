@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import redis
 
 from app.core.config import settings
+from app.services import event_service
 
 PLATE = "KA05SS1234"
 
@@ -125,7 +126,7 @@ def test_stream_replays_missed_events_from_last_event_id(client, world, tokens):
     ticket = _ticket(client, tokens["guard"], world["property_id"])
     seen: list[tuple[str, str]] = []
     with client.stream(
-        "GET", f"/api/v1/events/stream?ticket={ticket}&last_event_id=0-0"
+        "GET", f"/api/v1/events/stream?ticket={ticket}&last_event_id=0"
     ) as response:
         assert response.status_code == 200
         frame_id = ""
@@ -139,3 +140,17 @@ def test_stream_replays_missed_events_from_last_event_id(client, world, tokens):
 
     assert any(name == "invitation.approved" for _fid, name in seen)
     assert all(frame_id for frame_id, _name in seen)
+
+
+def test_event_archive_survives_beyond_redis_window(world):
+    for index in range(505):
+        event_service.publish_event(
+            "archive.test",
+            property_id=world["property_id"],
+            data={"index": index},
+        )
+
+    archived = event_service.archived_events(world["property_id"], after_sequence=0)
+    assert len(archived) >= 505
+    assert archived[0]["sequence"] < archived[-1]["sequence"]
+    assert archived[-1]["data"]["index"] == 504

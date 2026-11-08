@@ -15,10 +15,11 @@ def notify_user(
     title: str,
     body: str,
 ) -> Notification:
-    """Deliver an in-app notification. External channels need a configured provider.
+    """Create the authoritative in-app note and a queued email delivery row.
 
-    SMS/email/WhatsApp rows are recorded as SKIPPED rather than pretending the
-    message was delivered. Entry decisions never depend on notification delivery.
+    Email rows are PENDING until `python -m app.workers.notifications` runs.
+    The worker marks them SENT, SKIPPED (no SMTP) or FAILED (retry exhausted);
+    entry decisions never depend on delivery.
     """
     note = Notification(
         organization_id=organization_id,
@@ -29,5 +30,14 @@ def notify_user(
         status=NotificationStatus.SENT.value,
         sent_at=utcnow(),
     )
-    db.add(note)
+    email = Notification(
+        organization_id=organization_id,
+        user_id=user_id,
+        channel=NotificationChannel.EMAIL.value,
+        title=title,
+        body=body,
+        status=NotificationStatus.PENDING.value,
+        attempts=0,
+    )
+    db.add_all([note, email])
     return note

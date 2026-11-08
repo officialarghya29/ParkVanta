@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     default_qr_validity_minutes: int = 240
     default_overstay_grace_minutes: int = 30
     reservation_ttl_minutes: int = 30
+    event_retention_days: int = 30
 
     app_public_url: str = "http://localhost:5173"
     smtp_host: str = ""

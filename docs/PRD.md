@@ -59,7 +59,7 @@ Existing tools stop at visitor approval. **Parking is the hard part**, and ParkV
 | Automatic boom barrier control | Requires hardware integration and policy approval |
 | Number-plate recognition | Service designed, models not deployed (Stage 13) |
 | Native iOS/Android apps | PWA validated first |
-| Visitor SMS / WhatsApp / email delivery | Password reset uses SMTP; visitor notifications remain in-app and honestly marked |
+| Visitor SMS / WhatsApp delivery | Email uses the outbox worker; SMS/WhatsApp providers are not implemented |
 
 ## 6. Acceptance criteria (verified by tests)
 

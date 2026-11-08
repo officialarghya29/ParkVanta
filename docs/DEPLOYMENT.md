@@ -29,6 +29,7 @@ Verify: `curl http://localhost:8080/health` and `curl http://localhost:8080/read
 | `SMTP_FROM` | for reset | Sender address/display name |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | if required | Relay credentials, stored in the secret manager |
 | `SMTP_USE_TLS` / `SMTP_USE_SSL` | for reset | STARTTLS (587) or implicit TLS (465) |
+| `EVENT_RETENTION_DAYS` | recommended | Durable SSE archive retention; default `30` |
 | `SEED_PASSWORD` | dev only | Demo account password; never used by `app.bootstrap` |
 
 Secrets belong in a managed secret store, never in the image or repository.
@@ -62,7 +63,8 @@ Internet → TLS / WAF / ingress
              └── /api/*      (backend image, uvicorn workers)
                                  ├── managed PostgreSQL (backups, PITR)
                                  ├── managed Redis
-                                 └── expiry worker (scheduled)
+                                 ├── expiry worker (scheduled)
+                                 └── notification outbox worker (scheduled)
 ```
 
 Backend image: `backend/Dockerfile` (non-root user, healthcheck). Web image: `apps/web/Dockerfile` (multi-stage
@@ -74,8 +76,9 @@ build → Nginx). A reference reverse-proxy config is in `infrastructure/nginx/p
 2. Back up PostgreSQL (`pg_dump` or managed snapshot).
 3. Run migrations as a one-off job: `alembic upgrade head`.
 4. On a fresh database, run `python -m app.bootstrap` once and record the join code.
-5. Deploy the API, then the web assets.
-6. Hit `/health` and `/ready`; confirm a login, one gate verification and one password-reset email.
+5. Deploy the API, web assets and both scheduled workers.
+6. Hit `/health` and `/ready`; confirm a login, one gate verification, one password-reset email and one queued
+   visitor email marked `SENT`.
 7. Keep the previous image tag for rollback.
 
 **Rollback:** redeploy the previous image tag. Schema changes must be backward compatible for one release;
@@ -85,10 +88,13 @@ destructive migrations require a separate, planned step.
 
 ```bash
 python -m app.workers.expiry
+python -m app.workers.notifications
 ```
 
-Run every 60 seconds via cron, a Kubernetes CronJob, or a scheduled container. The sweep expires passes,
-reservations and stale invitations, and flags overstays. It is idempotent and safe to overlap.
+Run both every 60 seconds via cron, a Kubernetes CronJob, or a scheduled container. The expiry sweep expires
+passes/reservations/invitations, flags overstays and purges realtime events older than `EVENT_RETENTION_DAYS`.
+The notification worker drains the email outbox with `FOR UPDATE SKIP LOCKED`, retries SMTP failures and records
+`SENT`, `SKIPPED` or `FAILED`. Both are idempotent and safe to overlap.
 
 ## 6. Backups and recovery
 

@@ -7,7 +7,7 @@
 ![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
 ![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
-![Tests](https://img.shields.io/badge/verified-37%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-41%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
 
 **Visitor verification · residential parking allocation · smart gate operations**
@@ -20,11 +20,12 @@
 
 > **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
 > approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
-> The repository contains **37 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
-> offline network transition, plus recorded **read** and **write** load runs. Production onboarding now includes a
-> first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox and
-> SMTP-backed password reset. Deferred work is listed in [Known limitations](#known-limitations); nothing here is
-> labelled live unless a test or endpoint proves it.
+> The repository contains **41 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> offline network transition, plus recorded **read** and **write** load runs. Production onboarding includes a
+> first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, an email
+> outbox worker and SMTP-backed password reset. Access tokens stay in memory; gate actions survive reloads in
+> IndexedDB; SSE replay is backed by a 30-day PostgreSQL archive. Deferred work is listed in
+> [Known limitations](#known-limitations); nothing here is labelled live unless a test or endpoint proves it.
 
 ---
 
@@ -46,7 +47,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 
 | Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Backend verification | **37 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
+| Backend verification | **41 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
 | Frontend verification | **5 passed** | `vitest run` |
 | Browser lifecycle | **1 passed** | Playwright · real Chrome |
 | Read load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
@@ -55,8 +56,8 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 | Contention proof | **18 / 18 allocations · 72 expected conflicts** | 6 free bays · 3 rounds · 0 duplicates |
 | Dependency audit | **0 known advisories** | pip-audit · npm audit · Ruff · Bandit |
 | API surface | **59 paths · 68 operations** | FastAPI OpenAPI introspection |
-| Data model | **23 tables · 3 migrations** | SQLAlchemy metadata |
-| Client bundle | **281.4 kB gzip JS · 7.19 kB gzip CSS** | production Vite build |
+| Data model | **24 tables · 4 migrations** | SQLAlchemy metadata |
+| Client bundle | **282.0 kB gzip JS · 7.20 kB gzip CSS** | production Vite build |
 
 </div>
 
@@ -195,15 +196,18 @@ separate events, all audited.
 ### Realtime with replay
 
 `EventSource` cannot send an `Authorization` header, so a client exchanges its bearer token for a **2-minute,
-property-scoped stream ticket**. Frames are written to a bounded Redis Stream (500 frames per property) and read
-with `XREAD`, so a reconnect with `Last-Event-ID` (or `?last_event_id=`) receives the frames it missed.
+property-scoped stream ticket**. Every event is archived first in PostgreSQL (`realtime_events`, 30-day
+retention) and then published to a bounded Redis Stream for low-latency fan-out. Frame ids are archive
+sequences, so a reconnect with `Last-Event-ID` (or `?last_event_id=`) replays the durable archive and then tails
+Redis — no 500-frame loss window.
 
 Events are advisory. Receipt triggers a REST refetch; if Redis or the stream is unavailable, polling still
 converges on PostgreSQL. Event ids, types and slot codes are sent — never visitor PII.
 
 ### Offline trust boundary
 
-The guard console caches active visitors and queues gate actions in `localStorage` when connectivity drops.
+The guard console caches active visitors and queues gate actions in **IndexedDB** when connectivity drops, with a
+small localStorage fallback for browsers that block IndexedDB.
 
 | Offline action | Behaviour | Server guarantee |
 | :--- | :--- | :--- |
@@ -280,7 +284,7 @@ Each gate cycle commits three times and emits events, so its latency is intentio
 read benchmark. The contention figure is the stronger proof: with six free bays, exactly six approvals may win —
 and across 90 attempts, exactly 18 did, with no duplicate active row for any slot.
 
-<img src="docs/assets/chart-verification.png" alt="Verification matrix: 37 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 41 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
 
 ---
 
@@ -315,7 +319,7 @@ cp .env.example .env
 
 docker compose up -d db redis     # PostgreSQL :55432 · Redis :56379
 make install                      # Python 3.12 venv + pinned deps
-make migrate                      # Alembic → 23 tables · 3 migrations
+make migrate                      # Alembic → 24 tables · 4 migrations
 make seed                         # development demo society, 17 bays, accounts
 
 make api                          # API      → http://localhost:8080  (docs: /docs)
@@ -363,7 +367,7 @@ register at `/register`, select their apartment, and remain unverified until an 
 ## Verification
 
 ```bash
-make test                         # 37 backend tests on real PostgreSQL
+make test                         # 41 backend tests on real PostgreSQL
 cd apps/web && npm test           # 5 frontend unit tests
 cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
 cd apps/web && npm run build      # type-check + production bundle
@@ -374,7 +378,7 @@ make lint && make audit           # Ruff, pip-audit and npm audit
 
 | Suite | Command | Result |
 | :--- | :--- | ---: |
-| Backend | `pytest -q` | **37 passed** |
+| Backend | `pytest -q` | **41 passed** |
 | Frontend unit | `npm test` | **5 passed** |
 | Browser E2E | `npm run test:e2e` | **1 passed** |
 | Production build | `npm run build` | **passed** |
@@ -479,6 +483,9 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 - Offline entry is denied without a prior online authorization; replay is blocked by a unique ledger key.
 - Society join codes are 64-bit, admin-only to read/rotate, and expose only active property/apartment labels.
 - Password reset uses a single-use hashed token and configured SMTP; production returns 503 if delivery is absent.
+- Access tokens stay in JavaScript memory; the httpOnly refresh cookie restores the session after reload.
+- Realtime frames are archived in PostgreSQL before fan-out, with configurable retention and sequence replay.
+- Visitor email uses a status-tracked outbox with bounded retries; no delivery is claimed before SMTP accepts it.
 - No PII in QR payloads; visitor-safe pass projection; no facial recognition.
 - The application refuses to boot in production with the default development JWT secret.
 - CI blocks on Ruff, `pip-audit`, `npm audit --omit=dev --audit-level=high`; Bandit high-severity findings are clean.
@@ -491,10 +498,10 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 | :--- | :--- | :--- |
 | Both benchmarks run on one host | Results are regression baselines, not capacity guarantees | Repeat on pilot hardware and managed PostgreSQL |
 | Write benchmark uses a synthetic bay pool | It proves code paths, not a specific society's capacity | Replay against a copy of pilot inventory |
-| SSE replay retains 500 frames per property | A very long disconnect can miss older frames | Redis Stream consumer groups / durable archive |
-| Offline queue lives in browser storage | Clearing site data drops unsynced exits | IndexedDB + service worker background sync |
-| Access token in `localStorage` | Larger XSS blast radius | In-memory token + strict CSP |
-| Visitor notifications are in-app only | Pass links are copied/shared by the resident; no outbound SMS/email | Notification outbox with provider adapters and retry/status |
+| Event archive retention is 30 days | Disconnects older than the retention window cannot replay | Tune `EVENT_RETENTION_DAYS` or export the archive |
+| Offline queue is device-local (IndexedDB) | Clearing site data or losing the device drops unsynced exits | Service-worker background sync + server-side export/import |
+| Visitor email needs the outbox worker | If the worker stops, email stays `PENDING`; in-app notes still arrive | Managed scheduler, alert on pending age, provider failover |
+| SMS/WhatsApp outbound is not implemented | Visitor updates are in-app + email only | Provider adapters with consent and delivery receipts |
 | Vision AI not deployed | No ANPR/occupancy inference | Stage 13 with measured accuracy |
 
 ## Roadmap
@@ -506,6 +513,7 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 - [x] **17b** Reproducible load harness with recorded results
 - [x] **17c** Dependency CVE gate, lint gate and mixed write-path benchmark
 - [x] **17d** Production bootstrap, join-code onboarding, resident verification, notification inbox and SMTP reset
+- [x] **17e** Durable event archive, email outbox worker, in-memory tokens and IndexedDB gate queue
 - [ ] **18** ParkVanta Vision (ANPR + occupancy) with an evaluation protocol
 - [x] **19a** Single-property pilot runbook with backup, restore and monitoring procedures
 - [ ] **19** Pilot at one property and production hardening

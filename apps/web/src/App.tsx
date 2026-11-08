@@ -21,8 +21,21 @@ const queryClient = new QueryClient({
   },
 });
 
+function AuthLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div
+        className="h-7 w-7 animate-spin rounded-full border-2 border-teal/20 border-t-teal-bright"
+        role="status"
+        aria-label="Restoring session"
+      />
+    </div>
+  );
+}
+
 function Protected({ children, roles }: { children: ReactNode; roles?: Role[] }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <AuthLoading />;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) {
     return <Navigate to={homeRouteFor(user.role)} replace />;
@@ -31,18 +44,21 @@ function Protected({ children, roles }: { children: ReactNode; roles?: Role[] })
 }
 
 function PublicOnly({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <AuthLoading />;
   if (user) return <Navigate to={homeRouteFor(user.role)} replace />;
   return children;
 }
 
 function RootRedirect() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <AuthLoading />;
   return <Navigate to={user ? homeRouteFor(user.role) : "/login"} replace />;
 }
 
 function LoginRoute() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <AuthLoading />;
   if (user) return <Navigate to={homeRouteFor(user.role)} replace />;
   return <LoginPage />;
 }

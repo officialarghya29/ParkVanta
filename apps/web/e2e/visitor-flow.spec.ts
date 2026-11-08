@@ -20,6 +20,9 @@ test("resident issues a pass; guard authorizes entry, confirms and releases the 
   const resident = await residentContext.newPage();
   await signIn(resident, "resident@skyline.dev");
   await expect(resident).toHaveURL(/\/resident$/);
+  expect(await resident.evaluate(() => localStorage.getItem("parkvanta.session"))).toBeNull();
+  await resident.reload();
+  await expect(resident).toHaveURL(/\/resident$/);
 
   await resident.getByTestId("visitor-name").fill(guest);
   await resident.getByTestId("vehicle-registration").fill(plate);
@@ -57,6 +60,7 @@ test("resident issues a pass; guard authorizes entry, confirms and releases the 
   await guard.getByTestId("guard-exit").first().click();
   await expect(guard.getByTestId("offline-sync-result")).toContainText(/queued/i);
   await expect(guard.getByText("No vehicles inside")).toBeVisible();
+  expect(await guard.evaluate(() => localStorage.getItem("parkvanta.gate.queue.v1"))).toBeNull();
 
   // Restoring the connection replays the queue exactly once.
   await guardContext.setOffline(false);

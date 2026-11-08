@@ -113,18 +113,35 @@ client GET /events/stream?ticket=…[&last_event_id=…]
   → replay retained frames, then tail live frames
 service commits transaction
   → publish_event(type, property_id, data)   -- never before commit
-  → XADD stream (500-frame window) + PUBLISH
-  → SSE frame: id (Stream id), type, occurred_at, data
+  → INSERT realtime_events (durable, 30-day retention, sequence id)
+  → XADD stream (500-frame live window) + PUBLISH
+  → SSE frame: id (archive sequence), type, occurred_at, data
 client invalidates TanStack Query keys → refetch REST
 ```
 
 Events are a latency optimisation, not state. Publishing happens after `db.commit()` in invitation, gate,
-allocation, offline reconciliation and expiry paths. A reconnect can pass `Last-Event-ID` (or
-`last_event_id`) to recover retained frames; beyond the 500-frame window, clients refetch REST. If Redis or
-the stream drops, polling intervals (15–20s, relaxed to 60s while connected) still converge on PostgreSQL.
-Stream tickets avoid putting the access token in a URL and expire after two minutes.
+allocation, offline reconciliation and expiry paths. Every event is archived in PostgreSQL before Redis. A
+reconnect passes `Last-Event-ID` (or `last_event_id`) to replay the durable sequence, then tails Redis. The
+500-frame Redis window is only a live cache; the archive is the replay source and is purged by the expiry worker
+after `EVENT_RETENTION_DAYS` (default 30). If Redis drops, polling still converges on PostgreSQL. Stream tickets
+avoid putting the access token in a URL and expire after two minutes.
 
-### 3.5 Onboarding and account recovery
+### 3.5 Email notification outbox
+
+```text
+transaction commits
+  → notification_service: IN_APP row SENT + EMAIL row PENDING
+worker every minute
+  → claim PENDING rows (FOR UPDATE SKIP LOCKED)
+  → SMTP accept → SENT + sent_at
+  → SMTP unavailable → SKIPPED
+  → SMTP failure → attempts += 1; retry with exponential backoff
+  → 5 attempts exhausted → FAILED
+```
+
+The in-app note is authoritative and immediate. Email status never blocks a gate decision.
+
+### 3.6 Onboarding and account recovery
 
 ```text
 first deployment
@@ -146,7 +163,7 @@ In-app notifications are stored per user with an explicit `read_at`, so the bell
 truth. Visitor SMS/email remains deliberately queued as roadmap work; the password-reset transport is a real
 SMTP adapter, not a log-only stub.
 
-### 3.6 Offline gate reconciliation
+### 3.7 Offline gate reconciliation
 
 ```text
 client loses network
@@ -203,4 +220,4 @@ Nginx / managed ingress (TLS)
 | SSE + polling fallback instead of WebSockets | Simpler failure model, replay via Streams; database stays authoritative |
 | Slot chosen at approval, not at arrival | Guarantees a destination; may hold a slot for a no-show until expiry |
 | Pass issued at approval | Removes the "awaiting approval" scan state; the resident must approve before a pass exists |
-| Visitor notifications remain in-app; password reset uses SMTP | No fake outbound visitor delivery; reset fails closed in production if SMTP is absent |
+| Visitor email uses a durable outbox; SMS/WhatsApp remain out of scope | Delivery status is explicit; in-app state never waits for email |

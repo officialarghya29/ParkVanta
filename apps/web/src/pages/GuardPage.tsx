@@ -64,8 +64,8 @@ export function GuardPage() {
   const [overrideReason, setOverrideReason] = useState("");
   const [overrideDirection, setOverrideDirection] = useState("ENTRY");
   const [online, setOnline] = useState(() => navigator.onLine);
-  const [cachedActive, setCachedActive] = useState<ActiveVisitor[]>(readCachedVisitors);
-  const [pendingCount, setPendingCount] = useState(() => readQueue().length);
+  const [cachedActive, setCachedActive] = useState<ActiveVisitor[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const flushing = useRef(false);
@@ -87,7 +87,7 @@ export function GuardPage() {
   });
 
   const flushQueue = useCallback(async () => {
-    const queue = readQueue();
+    const queue = await readQueue();
     if (!queue.length || !user?.property_id || flushing.current) return;
     flushing.current = true;
     setSyncing(true);
@@ -96,8 +96,8 @@ export function GuardPage() {
         method: "POST",
         json: { property_id: user.property_id, device_id: getDeviceId(), actions: queue },
       });
-      removeQueued(queue.map((item) => item.client_event_id));
-      setPendingCount(readQueue().length);
+      await removeQueued(queue.map((item) => item.client_event_id));
+      setPendingCount((await readQueue()).length);
       setSyncMessage(
         response.rejected
           ? `Synced ${response.applied} · ${response.duplicates} duplicate · ${response.rejected} rejected`
@@ -122,7 +122,11 @@ export function GuardPage() {
     const goOffline = () => setOnline(false);
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
-    if (navigator.onLine && readQueue().length) void flushQueue();
+    if (navigator.onLine) {
+      void readQueue().then((queue) => {
+        if (queue.length) void flushQueue();
+      });
+    }
     return () => {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
@@ -130,9 +134,22 @@ export function GuardPage() {
   }, [flushQueue]);
 
   useEffect(() => {
+    let mounted = true;
+    void readCachedVisitors().then((cached) => {
+      if (mounted) setCachedActive(cached);
+    });
+    void readQueue().then((queue) => {
+      if (mounted) setPendingCount(queue.length);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (active.data) {
       setCachedActive(active.data);
-      cacheActiveVisitors(active.data);
+      void cacheActiveVisitors(active.data);
     }
   }, [active.data]);
 
@@ -243,15 +260,15 @@ export function GuardPage() {
   const error = verify.error ?? authorize.error ?? confirmEntry.error ?? confirmExit.error;
   const activeVisitors = active.data ?? (online ? [] : cachedActive);
 
-  function requestExit(visitor: ActiveVisitor) {
+  async function requestExit(visitor: ActiveVisitor) {
     if (!online) {
-      enqueue({
+      await enqueue({
         client_event_id: newClientEventId(),
         action: "EXIT_CONFIRM",
         invitation_id: visitor.invitation_id,
         recorded_at: new Date().toISOString(),
       });
-      setPendingCount(readQueue().length);
+      setPendingCount((await readQueue()).length);
       setCachedActive((previous) =>
         previous.filter((item) => item.invitation_id !== visitor.invitation_id),
       );
@@ -259,11 +276,26 @@ export function GuardPage() {
         previous?.filter((item) => item.invitation_id !== visitor.invitation_id),
       );
       setSyncMessage(
-        "Exit queued on this device. It reconciles automatically when the connection returns.",
+        "Exit queued in durable device storage. It reconciles automatically when the connection returns.",
       );
       return;
     }
     confirmExit.mutate(visitor.invitation_id);
+  }
+
+  async function queueManualOverride() {
+    await enqueue({
+      client_event_id: newClientEventId(),
+      action: "MANUAL_OVERRIDE",
+      reason: overrideReason,
+      direction: overrideDirection as "ENTRY" | "EXIT",
+      plate_number: plate || undefined,
+      invitation_id: verdict?.invitation_id ?? undefined,
+      recorded_at: new Date().toISOString(),
+    });
+    setPendingCount((await readQueue()).length);
+    setOverrideReason("");
+    setSyncMessage("Manual override queued for reconciliation.");
   }
 
   return (
@@ -498,7 +530,7 @@ export function GuardPage() {
                     data-testid="guard-exit"
                     variant="secondary"
                     className="px-3 py-1.5 text-xs"
-                    onClick={() => requestExit(visitor)}
+                    onClick={() => void requestExit(visitor)}
                     disabled={confirmExit.isPending}
                   >
                     <LogOut className="h-3.5 w-3.5" /> Confirm exit
@@ -543,18 +575,7 @@ export function GuardPage() {
                     disabled={overrideReason.trim().length < 10 || override.isPending}
                     onClick={() => {
                       if (!online) {
-                        enqueue({
-                          client_event_id: newClientEventId(),
-                          action: "MANUAL_OVERRIDE",
-                          reason: overrideReason,
-                          direction: overrideDirection as "ENTRY" | "EXIT",
-                          plate_number: plate || undefined,
-                          invitation_id: verdict?.invitation_id ?? undefined,
-                          recorded_at: new Date().toISOString(),
-                        });
-                        setPendingCount(readQueue().length);
-                        setOverrideReason("");
-                        setSyncMessage("Manual override queued for reconciliation.");
+                        void queueManualOverride();
                         return;
                       }
                       override.mutate();

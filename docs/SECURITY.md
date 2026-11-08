@@ -21,7 +21,8 @@ Explicitly out of scope: facial recognition and any biometric processing.
 - **Hashing:** Argon2id via `argon2-cffi` (3 iterations, 64 MiB, parallelism 4). Rehash-on-login when parameters
   change.
 - **Access token:** JWT HS256, 15 minutes, includes `sub`, `org`, `role`, `jti`. Role and org are re-checked
-  against the database on every request; a stale role token is rejected.
+  against the database on every request; a stale role token is rejected. The browser keeps it in JavaScript
+  memory only, never in localStorage; a reload restores the session through the httpOnly refresh cookie.
 - **Refresh token:** 48 random bytes, only its SHA-256 hash is stored. Rotated on use. Presenting an already
   rotated token revokes every active session for that user (replay detection).
 - **Cookies:** refresh cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` in production.
@@ -136,8 +137,7 @@ metadata, and are written in the same transaction as the operation.
 
 ## 9. Known security limitations
 
-- Access tokens are stored in `localStorage` for SPA convenience; a strict CSP and short TTL mitigate, but
-  in-memory-only storage is the next hardening step.
 - Rate limiting falls back to per-process state if Redis is unavailable.
-- Visitor notifications are in-app only. Password reset requires a configured SMTP relay; production fails closed
-  with 503 when delivery is unavailable.
+- Visitor email is queued in a status-tracked outbox and retried with backoff; the notification worker must be
+  scheduled. SMS/WhatsApp delivery is not implemented. Password reset requires SMTP; production fails closed with
+  503 when delivery is unavailable.

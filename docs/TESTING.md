@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **37 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **41 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -12,7 +12,7 @@
 | Write benchmark | `make load-test-write` | **100 cycles · 18/18 allocations · 0 errors** |
 | Lint | `make lint` | **Ruff clean** |
 | Dependency audits | `make audit` | **0 Python · 0 Node advisories** |
-| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 23 tables · 3 migrations |
+| Migration | `alembic upgrade head` | Applied to PostgreSQL 16, 24 tables · 4 migrations |
 
 Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQLite, so row locking and partial
 unique indexes are exercised with production semantics.
@@ -109,8 +109,14 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 - The stream returns `text/event-stream` and emits the `: connected` frame.
 - Approving an invitation publishes `invitation.approved` on the property's Redis channel with the matching
   invitation id, proving the service-layer hooks fire after commit.
-- The property Redis Stream retains the frame, and a stream opened with `last_event_id=0-0` replays the
-  approval event with its Stream id — the basis for reconnect recovery.
+- The property Redis Stream retains the frame, and a stream opened with `last_event_id=0` replays the approval
+  from the PostgreSQL archive with its sequence id.
+- 505 archived events remain replayable after the Redis 500-frame window, proving durable reconnect recovery.
+
+**Notification outbox** (`test_notification_delivery.py`)
+- A queued email is sent once, marked `SENT`, and addressed to the resident.
+- SMTP failure increments attempts and schedules an exponential retry without losing the in-app note.
+- Missing SMTP marks the delivery `SKIPPED` rather than falsely claiming success.
 
 **Offline reconciliation** (`test_offline.py`)
 - An offline exit releases the occupancy once; replaying the same client event is reported as a duplicate and
@@ -134,9 +140,11 @@ The test performs the acceptance scenario without touching the database:
 2. The issued pass URL is opened in a separate browser context; the QR renders in the visitor view.
 3. Guard signs in, pastes the pass, verifies, authorizes entry and confirms the vehicle entered.
 4. The slot is reported `OCCUPIED`; the vehicle appears inside.
-5. Guard goes offline: entry verification locks and the exit is queued in browser storage.
+5. Guard goes offline: entry verification locks and the exit is queued in IndexedDB.
 6. The vehicle leaves the displayed list optimistically; reconnecting reconciles the queue exactly once.
-7. Society admin signs in and the overview renders capacity.
+7. The browser reloads the resident session and restores it from the httpOnly refresh cookie; no access token
+   is present in localStorage.
+8. Society admin signs in and the overview renders capacity.
 
 To run in CI without Google Chrome, install browsers and set `PLAYWRIGHT_CHANNEL=chromium`.
 
@@ -167,8 +175,8 @@ The production build type-checks the entire client (`tsc --noEmit`).
 | Area | Status |
 | :--- | :--- |
 | Vision accuracy suite | Blocked on Stage 13 |
-| Long-disconnect replay (>500 frames) | Bounded Stream retention; older frames are reconciled by REST refetch |
-| Live SMTP relay | The mail adapter is tested with an injected sender; the pilot relay must be configured and tested |
+| Live SMTP relay | The mail adapter and outbox are tested with an injected sender; the pilot relay must be configured and tested |
+| SMS / WhatsApp delivery | Email and in-app delivery are implemented; SMS/WhatsApp providers are not |
 
 ## 6. Test data policy
 

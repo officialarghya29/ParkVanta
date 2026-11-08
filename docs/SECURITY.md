@@ -24,8 +24,9 @@ Explicitly out of scope: facial recognition and any biometric processing.
 - **Access token:** JWT HS256, 15 minutes, includes `sub`, `org`, `role`, `jti`. Role and org are re-checked
   against the database on every request; a stale role token is rejected. The browser keeps it in JavaScript
   memory only, never in localStorage; a reload restores the session through the httpOnly refresh cookie.
-- **Refresh token:** 48 random bytes, only its SHA-256 hash is stored. Rotated on use. Presenting an already
-  rotated token revokes every active session for that user (replay detection).
+- **Refresh token:** 48 random bytes, only its SHA-256 hash is stored. Rotated on use under a row lock, so concurrent
+  refresh calls cannot mint two successors. Presenting an already rotated token revokes every active session for
+  that user (replay detection). Password-reset tokens use the same locked single-consumption rule.
 - **Cookies:** refresh cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` in production.
 - **Password reset:** 30-minute hashed token, single use; successful reset revokes all refresh tokens. Responses
   never reveal whether an email exists. The link is delivered through the configured SMTP relay; in production a

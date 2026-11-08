@@ -1,12 +1,25 @@
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
 
-from app.core.errors import AppError
+import pytest
+from sqlalchemy import select
+
+from app.core.errors import AppError, AuthError, ValidationError
+from app.core.security import generate_pass_token, sha256_hex
+from app.core.time import utcnow
 from app.database.session import SessionLocal
-from app.models import Invitation, ParkingReservation, QRPass, User
+from app.models import (
+    Invitation,
+    ParkingReservation,
+    PasswordResetToken,
+    QRPass,
+    RefreshToken,
+    User,
+)
 from app.models.enums import PassStatus, ReservationStatus
-from app.services import gate_service, parking_service
+from app.services import auth_service, gate_service, parking_service
 
 
 def auth(token: str) -> dict:
@@ -76,6 +89,71 @@ def test_single_use_pass_survives_concurrent_authorizations(client, world, token
             )
         ]
         assert len(entries) == 1
+
+
+def test_refresh_rotation_waits_for_an_in_flight_token_lock(client, world, db_session):
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": world["resident_email"], "password": "TestPass123"},
+    ).json()
+    raw_refresh = login["refresh_token"]
+    token_hash = sha256_hex(raw_refresh)
+    locked = db_session.scalar(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash).with_for_update()
+    )
+    assert locked is not None
+
+    def rotate() -> None:
+        db = SessionLocal()
+        try:
+            auth_service.rotate_refresh_token(db, raw_refresh)
+        finally:
+            db.close()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(rotate)
+        time.sleep(0.25)
+        assert not future.done()
+        locked.revoked_at = utcnow()
+        db_session.commit()
+        with pytest.raises(AuthError):
+            future.result(timeout=5)
+
+
+def test_password_reset_token_is_consumed_under_a_row_lock(world, db_session):
+    user = db_session.scalar(select(User).where(User.email == world["resident_email"]))
+    assert user is not None
+    raw_token, token_hash = generate_pass_token()
+    db_session.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=utcnow() + timedelta(minutes=30),
+        )
+    )
+    db_session.commit()
+    locked = db_session.scalar(
+        select(PasswordResetToken)
+        .where(PasswordResetToken.token_hash == token_hash)
+        .with_for_update()
+    )
+    assert locked is not None
+
+    def reset() -> None:
+        db = SessionLocal()
+        try:
+            auth_service.reset_password(db, raw_token, "ChangedPass456")
+        finally:
+            db.close()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(reset)
+        time.sleep(0.25)
+        assert not future.done()
+        locked.used_at = utcnow()
+        db_session.commit()
+        with pytest.raises(ValidationError):
+            future.result(timeout=5)
 
 
 def test_concurrent_allocations_never_double_book_a_slot(client, world, tokens):

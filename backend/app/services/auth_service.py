@@ -128,7 +128,9 @@ def authenticate(db: Session, email: str, password: str) -> tuple[User, str, str
 
 def rotate_refresh_token(db: Session, raw_token: str) -> tuple[User, str, str]:
     token_hash = sha256_hex(raw_token)
-    token = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
+    token = db.scalar(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash).with_for_update()
+    )
     if token is None:
         raise AuthError("Refresh token is invalid")
 
@@ -302,12 +304,14 @@ def request_password_reset(db: Session, email: str) -> None:
 
 def reset_password(db: Session, raw_token: str, new_password: str) -> None:
     token = db.scalar(
-        select(PasswordResetToken).where(PasswordResetToken.token_hash == sha256_hex(raw_token))
+        select(PasswordResetToken)
+        .where(PasswordResetToken.token_hash == sha256_hex(raw_token))
+        .with_for_update()
     )
     if token is None or token.used_at is not None or token.expires_at <= utcnow():
         raise ValidationError("Reset token is invalid or has expired")
 
-    user = db.get(User, token.user_id)
+    user = db.scalar(select(User).where(User.id == token.user_id).with_for_update())
     if user is None:
         raise ValidationError("Reset token is invalid or has expired")
 

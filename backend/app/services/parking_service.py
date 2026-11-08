@@ -221,7 +221,11 @@ def release_occupancy(
         )
 
     occupancy, slot = row
-    reservation = db.get(ParkingReservation, occupancy.reservation_id)
+    reservation = db.scalar(
+        select(ParkingReservation)
+        .where(ParkingReservation.id == occupancy.reservation_id)
+        .with_for_update()
+    )
     invitation = db.get(Invitation, occupancy.invitation_id)
     if reservation is None or invitation is None:
         raise ConflictError("Occupancy data is inconsistent", code="occupancy_inconsistent")

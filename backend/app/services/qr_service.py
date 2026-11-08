@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.security import sha256_hex
-from app.core.time import ensure_utc, local_now, utcnow
+from app.core.time import ensure_utc, utcnow
 from app.models import (
     Invitation,
     ParkingReservation,
@@ -65,7 +66,12 @@ def _deny(reason: str, message: str, **kwargs) -> PassVerdict:
 
 
 def within_visitor_window(policy: SocietyPolicy, prop: Property, moment: datetime) -> bool:
-    current = local_now(prop.timezone or "Asia/Kolkata").strftime("%H:%M")
+    try:
+        current = ensure_utc(moment).astimezone(
+            ZoneInfo(prop.timezone or "Asia/Kolkata")
+        ).strftime("%H:%M")
+    except Exception:
+        current = ensure_utc(moment).strftime("%H:%M")
     start = policy.visitor_window_start or "00:00"
     end = policy.visitor_window_end or "23:59"
     if start <= end:
@@ -159,6 +165,12 @@ def verify_pass(
             )
 
     policy = get_policy(db, property_id=invitation.property_id)
+    if policy.require_vehicle_for_entry and invitation.vehicle_id is None:
+        return _deny(
+            "vehicle_required",
+            "This property requires a registered vehicle for visitor entry.",
+            **base,
+        )
     if not within_visitor_window(policy, prop, now):
         return _deny(
             "outside_visitor_window",

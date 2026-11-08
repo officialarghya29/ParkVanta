@@ -190,7 +190,13 @@ def create_invitation(
     if not profile.is_verified:
         raise ForbiddenError("Your resident account is not verified yet")
 
-    prop = db.get(Property, resident.property_id) if resident.property_id else None
+    prop = (
+        db.scalar(
+            select(Property).where(Property.id == resident.property_id).with_for_update()
+        )
+        if resident.property_id
+        else None
+    )
     if prop is None:
         raise ValidationError("Resident is not assigned to a property")
 

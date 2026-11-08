@@ -54,10 +54,12 @@ def expire_passes(db: Session, now) -> int:
 def expire_reservations(db: Session, now) -> int:
     expired = list(
         db.scalars(
-            select(ParkingReservation).where(
+            select(ParkingReservation)
+            .where(
                 ParkingReservation.status == ReservationStatus.ACTIVE.value,
                 ParkingReservation.reserved_until < now,
             )
+            .with_for_update(skip_locked=True)
         )
     )
     count = 0
@@ -72,7 +74,11 @@ def expire_reservations(db: Session, now) -> int:
             continue
         reservation.status = ReservationStatus.EXPIRED.value
         reservation.released_at = now
-        slot = db.get(ParkingSlot, reservation.slot_id)
+        slot = db.scalar(
+            select(ParkingSlot)
+            .where(ParkingSlot.id == reservation.slot_id)
+            .with_for_update()
+        )
         if slot is not None and slot.status == SlotStatus.RESERVED.value:
             slot.status = SlotStatus.AVAILABLE.value
         invitation = db.get(Invitation, reservation.invitation_id)
@@ -86,10 +92,12 @@ def expire_pending_invitations(db: Session, now) -> int:
     """Expire invitations that were never approved and whose window has passed."""
     stale = list(
         db.scalars(
-            select(Invitation).where(
+            select(Invitation)
+            .where(
                 Invitation.status == InvitationStatus.PENDING.value,
                 Invitation.expected_departure < now - timedelta(minutes=30),
             )
+            .with_for_update(skip_locked=True)
         )
     )
     for invitation in stale:
@@ -107,6 +115,7 @@ def flag_overstays(db: Session, now) -> list[tuple]:
             ParkingOccupancy.overstay.is_(False),
             ParkingReservation.reserved_until < now,
         )
+        .with_for_update(of=ParkingOccupancy, skip_locked=True)
     ).all()
 
     flagged: list[tuple] = []

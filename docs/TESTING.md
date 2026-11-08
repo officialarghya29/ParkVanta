@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **60 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **64 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -74,6 +74,8 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
 - Password reset sends a real single-use link through the mail adapter, rotates the password and revokes old
   sessions; unknown emails return the same 202 without sending.
 - Refresh rotation works; reusing an old refresh token revokes the whole session family.
+- Refresh rotation locks the token row before issuing a replacement, so concurrent refresh calls cannot create two
+  valid successors; password-reset tokens are consumed under the same row-lock discipline.
 - Suspended accounts cannot sign in.
 - Cross-organization property reads return 403.
 - Guards cannot read another property's inventory.
@@ -114,8 +116,10 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
   one pass row is `CONSUMED`; one `ENTRY/AUTHORIZED` event exists.
 - Two threads allocate two vehicles against a single free slot: exactly one reservation exists; the other thread
   receives `no_slot_available`.
+- A refresh rotation blocked on an in-flight token row lock does not issue a successor until the lock is released.
+- A reset request blocked on an already-consumed token row cannot reset the password a second time.
 
-Both tests use a thread barrier and independent SQLAlchemy sessions against PostgreSQL.
+These tests use thread barriers, independent SQLAlchemy sessions, and explicit row locks against PostgreSQL.
 
 **Realtime** (`test_realtime.py`)
 - Stream ticket minting requires authentication and property access; a cross-tenant request returns 403.
@@ -134,6 +138,8 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 
 **Worker health and metrics** (`test_workers.py`)
 - The expiry sweep deletes archived events past `EVENT_RETENTION_DAYS` and keeps newer frames.
+- A locked pending invitation is skipped by the sweep (`SKIP LOCKED`) rather than being expired underneath an
+  in-flight approval.
 - An overstay is flagged once and queues both an in-app note and a pending email.
 - The health command fails on a stale outbox, then passes after the worker marks mail `SKIPPED`.
 - `/metrics` exposes outbox counts and worker age/up, and enforces the configured bearer token.
@@ -146,6 +152,8 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 **Policy validation** (`test_policy.py`)
 - Overnight visitor windows such as `22:00 → 06:00` are accepted and evaluated correctly.
 - Equal start/end times and invalid clock values such as `25:00` are rejected with `422`.
+- Enabling `require_vehicle_for_entry` makes a vehicle-less invitation fail gate verification with
+  `vehicle_required`.
 
 **Pilot preflight** (`test_pilot_preflight.py`)
 - A demo-seeded database with no worker heartbeats is blocked; production configuration with fresh heartbeats passes.

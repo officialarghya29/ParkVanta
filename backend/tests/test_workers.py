@@ -1,4 +1,5 @@
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from sqlalchemy import select
@@ -131,6 +132,52 @@ def test_expiry_sweep_flags_overstay_and_queues_resident_notification(world, db_
     assert email[0].status == NotificationStatus.PENDING.value
     assert len(in_app) == 1
     assert "overstay" in in_app[0].title.lower()
+
+
+def test_expiry_sweep_skips_rows_locked_by_another_worker(world, db_session):
+    now = utcnow()
+    resident = _resident(db_session, world)
+    visitor = Visitor(
+        organization_id=world["org_id"],
+        property_id=world["property_id"],
+        name="Locked Pending Guest",
+    )
+    db_session.add(visitor)
+    db_session.flush()
+    invitation = Invitation(
+        organization_id=world["org_id"],
+        property_id=world["property_id"],
+        resident_user_id=resident.id,
+        apartment_id=world["apartment_id"],
+        visitor_id=visitor.id,
+        visitor_type="GUEST",
+        expected_arrival=now - timedelta(hours=2),
+        expected_departure=now - timedelta(hours=1),
+        status=InvitationStatus.PENDING.value,
+    )
+    db_session.add(invitation)
+    db_session.commit()
+
+    locker = SessionLocal()
+    locked = locker.scalar(
+        select(Invitation).where(Invitation.id == invitation.id).with_for_update()
+    )
+    assert locked is not None
+    worker = SessionLocal()
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                expiry_worker.expire_pending_invitations, worker, utcnow()
+            )
+            assert future.result(timeout=2) == 0
+    finally:
+        worker.close()
+        locker.rollback()
+        locker.close()
+
+    db_session.refresh(invitation)
+    assert invitation.status == InvitationStatus.PENDING.value
+    assert expiry_worker.expire_pending_invitations(db_session, utcnow()) == 1
 
 
 def test_health_check_fails_on_stale_outbox_and_recovers_after_worker_run(

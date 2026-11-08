@@ -1,0 +1,48 @@
+groups:
+  - name: parkvanta-outbox
+    rules:
+      - alert: ParkVantaEmailDeliveryFailed
+        expr: parkvanta_notification_outbox_rows{status="FAILED"} > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: ParkVanta has permanently failed visitor emails
+          description: >-
+            {{ $value }} email delivery row(s) are FAILED. Fix the relay, then
+            requeue recent rows according to docs/PILOT_RUNBOOK.md section 6.1.
+
+      - alert: ParkVantaOutboxStale
+        expr: parkvanta_notification_outbox_oldest_pending_seconds > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: ParkVanta visitor email is stuck in the outbox
+          description: >-
+            The oldest pending email is {{ $value | humanizeDuration }} old.
+            Check the scheduler and SMTP relay.
+
+      - alert: ParkVantaOutboxRetrying
+        expr: parkvanta_notification_outbox_pending_attempts_max >= 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: ParkVanta email delivery is repeatedly retrying
+          description: >-
+            A queued email has reached {{ $value }} attempts. Inspect the
+            notification error column and the relay before the row is FAILED.
+
+  - name: parkvanta-workers
+    rules:
+      - alert: ParkVantaWorkerHeartbeatStale
+        expr: parkvanta_worker_up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: ParkVanta worker {{ $labels.worker }} is not reporting
+          description: >-
+            The {{ $labels.worker }} heartbeat is missing or older than
+            WORKER_STALE_MINUTES. Check the cron/CronJob and the worker log.

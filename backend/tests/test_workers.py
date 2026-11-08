@@ -1,9 +1,11 @@
+import threading
 from datetime import timedelta
 
 from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.time import utcnow
+from app.database.session import SessionLocal
 from app.models import (
     Invitation,
     Notification,
@@ -12,6 +14,7 @@ from app.models import (
     RealtimeEvent,
     User,
     Visitor,
+    WorkerHeartbeat,
 )
 from app.models.enums import (
     InvitationStatus,
@@ -207,3 +210,36 @@ def test_metrics_expose_outbox_and_worker_freshness(
         ).status_code
         == 200
     )
+
+
+def test_heartbeats_survive_concurrent_worker_runs(db_session):
+    barrier = threading.Barrier(2)
+    errors: list[BaseException] = []
+    moments = [utcnow() - timedelta(seconds=2), utcnow()]
+
+    def record(now):
+        session = SessionLocal()
+        try:
+            barrier.wait(timeout=5)
+            worker_service.record_heartbeat(session, "notifications", now=now)
+            session.commit()
+        except BaseException as exc:  # surface any unique-key race
+            errors.append(exc)
+        finally:
+            session.close()
+
+    threads = [threading.Thread(target=record, args=(moment,)) for moment in moments]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert all(not thread.is_alive() for thread in threads)
+    assert not errors
+    rows = list(
+        db_session.scalars(
+            select(WorkerHeartbeat).where(WorkerHeartbeat.worker == "notifications")
+        )
+    )
+    assert len(rows) == 1
+    assert rows[0].last_seen_at in moments

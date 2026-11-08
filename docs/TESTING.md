@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **45 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **46 passed** |
 | Frontend unit | `cd apps/web && npm test` | **5 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -125,6 +125,7 @@ Both tests use a thread barrier and independent SQLAlchemy sessions against Post
 - An overstay is flagged once and queues both an in-app note and a pending email.
 - The health command fails on a stale outbox, then passes after the worker marks mail `SKIPPED`.
 - `/metrics` exposes outbox counts and worker age/up, and enforces the configured bearer token.
+- Two overlapping worker sessions upsert exactly one heartbeat row without a unique-key violation.
 
 **Offline reconciliation** (`test_offline.py`)
 - An offline exit releases the occupancy once; replaying the same client event is reported as a duplicate and

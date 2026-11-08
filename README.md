@@ -7,7 +7,7 @@
 ![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
 ![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
-![Tests](https://img.shields.io/badge/verified-45%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-46%20backend%20%C2%B7%205%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
 
 **Visitor verification · residential parking allocation · smart gate operations**
@@ -20,7 +20,7 @@
 
 > **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
 > approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
-> The repository contains **45 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> The repository contains **46 backend tests**, **5 frontend unit tests**, **1 real-Chrome browser scenario** with an
 > offline network transition, plus recorded **read** and **write** load runs. Production onboarding includes a
 > first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, an email
 > outbox worker and SMTP-backed password reset. Access tokens stay in memory; gate actions survive reloads in
@@ -47,7 +47,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 
 | Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Backend verification | **45 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
+| Backend verification | **46 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
 | Frontend verification | **5 passed** | `vitest run` |
 | Browser lifecycle | **1 passed** | Playwright · real Chrome |
 | Read load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
@@ -284,7 +284,7 @@ Each gate cycle commits three times and emits events, so its latency is intentio
 read benchmark. The contention figure is the stronger proof: with six free bays, exactly six approvals may win —
 and across 90 attempts, exactly 18 did, with no duplicate active row for any slot.
 
-<img src="docs/assets/chart-verification.png" alt="Verification matrix: 45 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 46 backend tests, 5 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
 
 ---
 
@@ -369,7 +369,7 @@ register at `/register`, select their apartment, and remain unverified until an 
 ## Verification
 
 ```bash
-make test                         # 45 backend tests on real PostgreSQL
+make test                         # 46 backend tests on real PostgreSQL
 cd apps/web && npm test           # 5 frontend unit tests
 cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
 cd apps/web && npm run build      # type-check + production bundle
@@ -380,7 +380,7 @@ make lint && make audit           # Ruff, pip-audit and npm audit
 
 | Suite | Command | Result |
 | :--- | :--- | ---: |
-| Backend | `pytest -q` | **45 passed** |
+| Backend | `pytest -q` | **46 passed** |
 | Frontend unit | `npm test` | **5 passed** |
 | Browser E2E | `npm run test:e2e` | **1 passed** |
 | Production build | `npm run build` | **passed** |
@@ -487,7 +487,8 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 - Password reset uses a single-use hashed token and configured SMTP; production returns 503 if delivery is absent.
 - Access tokens stay in JavaScript memory; the httpOnly refresh cookie restores the session after reload.
 - Realtime frames are archived in PostgreSQL before fan-out, with configurable retention and sequence replay.
-- Prometheus metrics expose outbox depth and worker freshness without visitor PII; scraping can require a bearer token.
+- Prometheus metrics expose outbox depth and worker freshness without visitor PII; scraping can require a bearer
+  token, with ready-made alert rules and a Grafana dashboard in `infrastructure/monitoring/`.
 - Visitor email uses a status-tracked outbox with bounded retries; no delivery is claimed before SMTP accepts it.
 - No PII in QR payloads; visitor-safe pass projection; no facial recognition.
 - The application refuses to boot in production with the default development JWT secret.

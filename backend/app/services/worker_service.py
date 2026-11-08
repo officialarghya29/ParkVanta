@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -27,16 +28,21 @@ def record_heartbeat(
     status: str = "OK",
     detail: str | None = None,
     now: datetime | None = None,
-) -> WorkerHeartbeat:
-    """Upsert the worker's last successful run in the caller's transaction."""
+) -> WorkerHeartbeat | None:
+    """Upsert the last run; safe when scheduled workers overlap."""
     now = now or utcnow()
+    detail = (detail or "")[:255] or None
+    db.execute(
+        pg_insert(WorkerHeartbeat)
+        .values(worker=worker, last_seen_at=now, last_status=status, detail=detail)
+        .on_conflict_do_update(
+            index_elements=[WorkerHeartbeat.worker],
+            set_={"last_seen_at": now, "last_status": status, "detail": detail},
+        )
+    )
     row = db.get(WorkerHeartbeat, worker)
-    if row is None:
-        row = WorkerHeartbeat(worker=worker)
-        db.add(row)
-    row.last_seen_at = now
-    row.last_status = status
-    row.detail = (detail or "")[:255] or None
+    if row is not None:
+        db.refresh(row)
     return row
 
 

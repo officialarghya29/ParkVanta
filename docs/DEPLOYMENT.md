@@ -125,6 +125,10 @@ stale `PENDING` email, or a missing/stale heartbeat. Triage and requeue queries 
 | Email outbox and worker freshness | `/metrics` scrape |
 | Worker health | `python -m app.workers.health` exit status |
 
+Ready-made artifacts live in `infrastructure/monitoring/`: `prometheus-rules.yml` covers `FAILED` rows, a stale
+oldest-pending age, repeated retries and missing heartbeats; `grafana-dashboard.json` graphs outbox status, oldest
+pending age, retry attempts and worker heartbeat age. Import both and select the Prometheus datasource.
+
 Alerts worth paging on: `/ready` failing, 5xx > 2% for 5 minutes, login failure spike, `no_slot_available`
 spike (capacity or policy problem), gate authorization errors, any `FAILED` email row, oldest `PENDING` email over
 10 minutes, or `parkvanta_worker_up == 0`.
@@ -135,9 +139,10 @@ spike (capacity or policy problem), gate authorization errors, any `FAILED` emai
 
 ```text
 backend:  alembic upgrade (service Postgres) → pytest
-frontend: npm ci → tsc + vite build
+frontend: npm ci → tsc + vite build → bundle budget
 e2e:      pip + npm ci → playwright install chromium → full lifecycle test
-security: ruff → pip-audit → npm audit --omit=dev --audit-level=high
+security: ruff → pip-audit → npm audit (production and dev)
+images:   docker build API + web → size budgets
 ```
 
 The E2E job installs Chromium and sets `PLAYWRIGHT_CHANNEL=chromium`; the bootstrap script resolves either the

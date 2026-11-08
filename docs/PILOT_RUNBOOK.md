@@ -215,6 +215,9 @@ arrive regardless, so a stuck outbox never blocks a gate decision. Each successf
 | Repeated retries | `attempts >= 3` on `PENDING` | Any row |
 | Worker stopped | last `notification dispatch complete` log line | > 5 minutes old |
 
+Prometheus rules for these thresholds ship in `infrastructure/monitoring/prometheus-rules.yml`; the companion
+Grafana dashboard is `infrastructure/monitoring/grafana-dashboard.json`.
+
 ```sql
 -- Outbox health; run every 5 minutes and export the values as metrics
 select status, count(*),

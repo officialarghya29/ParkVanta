@@ -1,7 +1,7 @@
 {
   "recorded_at": "2026-11-08",
   "source": "pytest -q, vitest run, playwright test, ruff, pip-audit, bandit, npm audit, FastAPI OpenAPI introspection",
-  "backend_tests": 45,
+  "backend_tests": 46,
   "frontend_tests": 5,
   "e2e_tests": 1,
   "openapi_paths": 59,

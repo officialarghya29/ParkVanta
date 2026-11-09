@@ -33,6 +33,7 @@ import { api } from "../lib/api";
 import { extractPassToken, formatDateTime, formatTime, titleCase } from "../lib/format";
 import {
   cacheActiveVisitors,
+  chunkActions,
   enqueue,
   getDeviceId,
   newClientEventId,
@@ -92,17 +93,36 @@ export function GuardPage() {
     flushing.current = true;
     setSyncing(true);
     try {
-      const response = await api<OfflineReconcileResponse>("/gate/offline/reconcile", {
-        method: "POST",
-        json: { property_id: user.property_id, device_id: getDeviceId(), actions: queue },
-      });
+      let applied = 0;
+      let duplicates = 0;
+      let rejected = 0;
+      const rejectionReasons: string[] = [];
+      for (const batch of chunkActions(queue)) {
+        const response = await api<OfflineReconcileResponse>("/gate/offline/reconcile", {
+          method: "POST",
+          json: { property_id: user.property_id, device_id: getDeviceId(), actions: batch },
+        });
+        applied += response.applied;
+        duplicates += response.duplicates;
+        rejected += response.rejected;
+        for (const result of response.results) {
+          if (result.status === "rejected") {
+            rejectionReasons.push(
+              `${result.action}: ${result.message ?? result.code ?? "rejected"}`,
+            );
+          }
+        }
+      }
       await removeQueued(queue.map((item) => item.client_event_id));
       setPendingCount((await readQueue()).length);
+      const rejectedNote = [...new Set(rejectionReasons)].slice(0, 2).join("; ");
       setSyncMessage(
-        response.rejected
-          ? `Synced ${response.applied} · ${response.duplicates} duplicate · ${response.rejected} rejected`
-          : `Synced ${response.applied} offline action(s)${
-              response.duplicates ? ` · ${response.duplicates} already applied` : ""
+        rejected
+          ? `Synced ${applied} · ${duplicates} duplicate · ${rejected} rejected${
+              rejectedNote ? ` — ${rejectedNote}` : ""
+            }`
+          : `Synced ${applied} offline action(s)${
+              duplicates ? ` · ${duplicates} already applied` : ""
             }`,
       );
       void queryClient.invalidateQueries({ queryKey: ["gate"] });

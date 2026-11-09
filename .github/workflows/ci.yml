@@ -126,6 +126,8 @@ jobs:
         run: pip install -r backend/requirements-dev.txt
       - name: Lint backend
         run: ruff check backend
+      - name: Scan backend for high-severity issues
+        run: bandit -q -r backend -lll
       - name: Audit Python dependencies
         run: pip-audit --progress-spinner off
       - uses: actions/setup-node@v4

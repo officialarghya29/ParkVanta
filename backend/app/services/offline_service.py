@@ -14,9 +14,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.deps import assert_property_access
-from app.core.errors import AppError, ConflictError, ForbiddenError, ValidationError
+from app.core.errors import (
+    AppError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationError,
+)
 from app.core.time import utcnow
-from app.models import EntryExitEvent, OfflineGateAction, User
+from app.models import EntryExitEvent, Invitation, OfflineGateAction, User
 from app.models.enums import EventDecision, EventDirection, Role
 from app.services import gate_service
 
@@ -56,9 +62,24 @@ def _duplicate(action) -> dict:
     }
 
 
+def _assert_action_property(db: Session, action, property_id: UUID) -> None:
+    """An action for one property must not be filed against another."""
+    if action.invitation_id is None:
+        return
+    invitation = db.get(Invitation, action.invitation_id)
+    if invitation is None:
+        raise NotFoundError("Invitation not found")
+    if invitation.property_id != property_id:
+        raise ForbiddenError(
+            "Offline action belongs to a different property", code="wrong_property"
+        )
+
+
 def _apply(
     db: Session, guard: User, action, ip_address: str | None, property_id: UUID
 ) -> dict:
+    _assert_action_property(db, action, property_id)
+
     if action.action == "ENTRY_CONFIRM":
         if action.invitation_id is None:
             raise ValidationError("invitation_id is required for an offline entry confirmation")
@@ -172,6 +193,30 @@ def reconcile(
             results.append(_duplicate(action))
             continue
 
+        # Claim the idempotency key before applying anything. The uncommitted
+        # unique row blocks a concurrent replay; if this transaction loses the
+        # race, the winner has already committed the only side effect. Writing
+        # the ledger after the gate service would allow both replays to commit
+        # their own audit events before one of the ledger inserts failed.
+        ledger = OfflineGateAction(
+            organization_id=prop.organization_id,
+            property_id=property_id,
+            guard_user_id=guard.id,
+            client_event_id=action.client_event_id,
+            action=action.action,
+            status="PROCESSING",
+            device_id=device_id,
+            recorded_at=recorded_at,
+            result={},
+        )
+        db.add(ledger)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            results.append(_duplicate(action))
+            continue
+
         try:
             outcome = _apply(db, guard, action, ip_address, property_id)
         except AppError as exc:
@@ -186,25 +231,9 @@ def reconcile(
             continue
 
         status = outcome.pop("status", "applied")
-        db.add(
-            OfflineGateAction(
-                organization_id=prop.organization_id,
-                property_id=property_id,
-                guard_user_id=guard.id,
-                client_event_id=action.client_event_id,
-                action=action.action,
-                status=status.upper(),
-                device_id=device_id,
-                recorded_at=recorded_at,
-                result=outcome,
-            )
-        )
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            results.append(_duplicate(action))
-            continue
+        ledger.status = status.upper()
+        ledger.result = outcome
+        db.commit()
 
         results.append(
             {

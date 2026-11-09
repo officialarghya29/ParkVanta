@@ -93,11 +93,13 @@ metadata, and are written in the same transaction as the operation.
   `AUTHORIZED` entry event already exists for the invitation; otherwise the action is rejected with
   `authorization_required`.
 - Queue entries carry `client_event_id`, `device_id` and `recorded_at`. The unique
-  `(property_id, client_event_id)` index makes retries idempotent.
+  `(property_id, client_event_id)` index makes retries idempotent. The ledger row is claimed before the gate
+  transition and committed with it, so a concurrent replay cannot duplicate the audit event.
 - Timestamps more than 5 minutes ahead of server time are rejected (`clock_mismatch`); actions older than
   7 days are rejected (`stale_action`). Server `created_at` is authoritative for audit ordering.
 - Local storage is convenience state, not trust: reconciliation always reloads the invitation, occupancy and
-  slot state from PostgreSQL and enforces guard/property scope.
+  slot state from PostgreSQL and enforces guard/property scope. An action whose invitation belongs to a different
+  property is rejected as `wrong_property`.
 
 ## 6.2 Realtime stream tickets
 

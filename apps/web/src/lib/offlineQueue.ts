@@ -22,6 +22,10 @@ const LEGACY_QUEUE_KEY = "parkvanta.gate.queue.v1";
 const LEGACY_CACHE_KEY = "parkvanta.gate.active.v1";
 const DEVICE_KEY = "parkvanta.device.id";
 
+// Mirrors the reconcile request's max_length=50. The queue itself retains up
+// to 100 actions so a busy shift is not lost, but each HTTP request is batched.
+export const OFFLINE_BATCH_LIMIT = 50;
+
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 function openDb(): Promise<IDBDatabase> {
@@ -98,6 +102,18 @@ function fallbackWriteQueue(actions: QueuedGateAction[]): void {
   } catch {
     // Storage can be unavailable in private mode; the in-memory UI still reflects intent.
   }
+}
+
+export function chunkActions<T>(
+  actions: T[],
+  size: number = OFFLINE_BATCH_LIMIT,
+): T[][] {
+  const chunkSize = Math.max(1, Math.floor(size));
+  const chunks: T[][] = [];
+  for (let index = 0; index < actions.length; index += chunkSize) {
+    chunks.push(actions.slice(index, index + chunkSize));
+  }
+  return chunks;
 }
 
 export function newClientEventId(): string {

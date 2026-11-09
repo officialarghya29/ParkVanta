@@ -33,6 +33,7 @@ notification outbox, durable event archive, worker heartbeats and hot-path index
 | `parking_reservations` | Slot held for a visit | **partial unique active slot** |
 | `parking_occupancies` | Vehicle physically inside | **partial unique active slot**, unique reservation/invitation |
 | `entry_exit_events` | Immutable gate decision trail | index `(property_id, created_at)` |
+| `offline_gate_actions` | Idempotency ledger for queued gate actions | **unique `(property_id, client_event_id)`** |
 | `audit_logs` | Security-critical actions | JSON metadata |
 | `society_policies` | Per-property rules | `property_id` unique |
 | `refresh_tokens` | Rotating sessions | `token_hash` unique |

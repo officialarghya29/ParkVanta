@@ -171,16 +171,20 @@ client loses network
   → block verify/authorize (entry cannot be authorized offline)
   → queue EXIT_CONFIRM / MANUAL_OVERRIDE with client_event_id, device_id, recorded_at
 client reconnects
-  → POST /gate/offline/reconcile (batch)
+  → POST /gate/offline/reconcile (batch, max 50 actions per request)
       → reject clock skew > 5 min or age > 7 days
       → reject ENTRY_CONFIRM without an online AUTHORIZED event
+      → claim offline_gate_actions (unique property + client_event_id)
       → apply each action through the normal gate service
-      → INSERT offline_gate_actions (unique property + client_event_id)
+      → commit the gate transition and ledger status together
   → duplicate replay returns `duplicate` without a second transition
 ```
 
-The ledger is the idempotency boundary; the gate tables remain the source of truth. Server time is
-authoritative; the device timestamp is retained for audit and sanity checks only.
+The ledger is the idempotency boundary; the gate tables remain the source of truth. The row is inserted before
+the gate transition, so a concurrent replay blocks on the unique key instead of committing the same audit event
+twice. If validation rejects the action, the ledger claim rolls back. The browser batches a 100-action device
+queue into 50-action requests. Server time is authoritative; the device timestamp is retained for audit and
+sanity checks only.
 
 ## 4. Data ownership and isolation
 

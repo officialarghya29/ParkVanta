@@ -52,7 +52,7 @@ def test_single_use_pass_survives_concurrent_authorizations(client, world, token
     ).json()
     raw_token = approval["pass_token"]
 
-    barrier = Barrier(2)
+    barrier = Barrier(8)
     outcomes: list[str] = []
 
     def attempt() -> None:
@@ -73,10 +73,11 @@ def test_single_use_pass_survives_concurrent_authorizations(client, world, token
         finally:
             db.close()
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        list(pool.map(lambda _: attempt(), range(2)))
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda _: attempt(), range(8)))
 
-    assert sorted(outcomes) == ["already_used", "authorized"]
+    assert outcomes.count("authorized") == 1
+    assert outcomes.count("already_used") == 7
 
     with SessionLocal() as db:
         pass_row = db.query(QRPass).filter(QRPass.invitation_id == invitation["id"]).one()
@@ -89,6 +90,48 @@ def test_single_use_pass_survives_concurrent_authorizations(client, world, token
             )
         ]
         assert len(entries) == 1
+
+
+def test_concurrent_refresh_calls_issue_at_most_one_successor(client, world):
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": world["resident_email"], "password": "TestPass123"},
+    ).json()
+    raw_refresh = login["refresh_token"]
+    barrier = Barrier(8)
+    outcomes: list[str] = []
+
+    def rotate() -> None:
+        db = SessionLocal()
+        try:
+            barrier.wait(timeout=10)
+            auth_service.rotate_refresh_token(db, raw_refresh)
+            outcomes.append("rotated")
+        except AuthError:
+            outcomes.append("rejected")
+        finally:
+            db.close()
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda _: rotate(), range(8)))
+
+    assert outcomes.count("rotated") == 1
+    assert outcomes.count("rejected") == 7
+
+    with SessionLocal() as db:
+        replacements = (
+            db.query(RefreshToken)
+            .filter(RefreshToken.replaced_by_hash.is_not(None))
+            .count()
+        )
+        assert replacements == 1
+        assert (
+            db.query(RefreshToken)
+            .filter(RefreshToken.user_id == db.query(User.id).filter(User.email == world["resident_email"]).scalar_subquery())
+            .filter(RefreshToken.revoked_at.is_(None))
+            .count()
+            == 0
+        )
 
 
 def test_refresh_rotation_waits_for_an_in_flight_token_lock(client, world, db_session):

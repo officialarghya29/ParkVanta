@@ -4,8 +4,8 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **64 passed** |
-| Frontend unit | `cd apps/web && npm test` | **5 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **66 passed** |
+| Frontend unit | `cd apps/web && npm test` | **7 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
 | Read benchmark | `make load-test` | **3,912 requests · 195.06 req/s · 0 errors** |
@@ -62,9 +62,9 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
 ## 1.3 Static and dependency gates
 
 - `make lint` → Ruff passes over the backend.
-- `make audit` → `pip-audit` and `npm audit --omit=dev --audit-level=high` pass with zero advisories.
+- `make audit` → `pip-audit`, `bandit -lll` and `npm audit --omit=dev --audit-level=high` pass with zero advisories.
 - Full `npm audit` is also clean after the Playwright 1.65 and Vitest 5 upgrades.
-- Bandit high-severity scan is clean.
+- Bandit high-severity scan is clean and enforced in CI.
 - CI runs all of the above in the `security` job; failures block the workflow.
 
 ## 2. What the backend suite proves
@@ -111,9 +111,12 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
 - Notifications are scoped to their owner, unread counts change on read, `read-all` clears the inbox, and another
   resident cannot mark someone else's notification.
 
-**Concurrency** (`test_concurrency.py`)
-- Two threads authorize the same pass simultaneously: outcomes are exactly `authorized` + `already_used`;
-  one pass row is `CONSUMED`; one `ENTRY/AUTHORIZED` event exists.
+**Concurrency** (`test_concurrency.py`, `test_offline.py`)
+- Eight threads authorize the same pass simultaneously: exactly one `authorized`, seven `already_used`; one pass
+  row is `CONSUMED`; one `ENTRY/AUTHORIZED` event exists.
+- Eight threads rotate the same refresh token: exactly one successor is issued and the rest are rejected.
+- Six threads replay one offline manual override: exactly one `applied`, five `duplicate`, one audit event and one
+  ledger row.
 - Two threads allocate two vehicles against a single free slot: exactly one reservation exists; the other thread
   receives `no_slot_available`.
 - A refresh rotation blocked on an in-flight token row lock does not issue a successor until the lock is released.
@@ -165,6 +168,8 @@ These tests use thread barriers, independent SQLAlchemy sessions, and explicit r
 **Offline reconciliation** (`test_offline.py`)
 - An offline exit releases the occupancy once; replaying the same client event is reported as a duplicate and
   produces no second release or audit row.
+- The idempotency ledger is claimed before the gate transition, so concurrent replay blocks on the unique key
+  instead of duplicating the side effect.
 - An offline entry confirmation without a prior online authorization is rejected with `authorization_required`,
   and the reserved slot stays reserved.
 - An offline entry confirmation after an online authorization succeeds.
@@ -197,6 +202,7 @@ To run in CI without Google Chrome, install browsers and set `PLAYWRIGHT_CHANNEL
 - Pass-token extraction from raw tokens, visitor URLs, query strings and fragments.
 - Enum-to-label formatting.
 - `datetime-local` conversion.
+- Offline queue batching splits 100 actions into 50-action reconcile requests without dropping or reordering them.
 
 The production build type-checks the entire client (`tsc --noEmit`).
 

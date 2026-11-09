@@ -65,6 +65,7 @@ lint:
 
 audit:
 	.venv/bin/pip-audit --progress-spinner off
+	.venv/bin/bandit -q -r backend -lll
 	cd apps/web && npm audit --omit=dev --audit-level=high
 
 pilot-backup:

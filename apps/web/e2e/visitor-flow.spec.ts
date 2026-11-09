@@ -76,6 +76,11 @@ test("resident issues a pass; guard authorizes entry, confirms and releases the 
   await expect(admin.getByTestId("overview")).toBeVisible();
   await expect(admin.getByTestId("overview")).toContainText("Total capacity");
 
+  await admin.getByRole("link", { name: "Audit trail" }).click();
+  await expect(admin).toHaveURL(/\/admin\/audit$/);
+  await expect(admin.getByTestId("audit-console")).toBeVisible();
+  await expect(admin.getByText("gate.entry_confirmed").first()).toBeVisible();
+
   await residentContext.close();
   await visitorContext.close();
   await guardContext.close();

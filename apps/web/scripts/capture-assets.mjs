@@ -187,6 +187,11 @@ await adminPage.getByTestId("inventory-page").waitFor();
 await settle(adminPage);
 await shoot(adminPage, "screenshot-inventory.png");
 
+await adminPage.goto(`${APP}/admin/audit`, { waitUntil: "networkidle" });
+await adminPage.getByTestId("audit-console").waitFor();
+await settle(adminPage);
+await shoot(adminPage, "screenshot-audit.png");
+
 const visitorContext = await browser.newContext({
   viewport: { width: 430, height: 932 },
   deviceScaleFactor: 2,

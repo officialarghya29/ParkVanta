@@ -131,6 +131,15 @@ the archive remains the replay source. Events are advisory: clients refetch REST
 Email delivery rows are intentionally excluded from the in-app list. They are dispatched by
 `python -m app.workers.notifications` and transition `PENDING → SENT | SKIPPED | FAILED` with bounded retries.
 
+## Audit
+
+| Method | Path | Access | Notes |
+| :--- | :--- | :--- | :--- |
+| GET | `/audit-logs?action=&entity_type=&actor_user_id=&from=&to=&limit=&offset=` | society admin / platform owner | Organization-scoped, newest first; `action` is a prefix filter; maximum 100 rows per page |
+
+The audit console exports only the visible page as CSV. The client quotes every field and prefixes spreadsheet
+formula characters so a metadata value cannot execute when opened in Excel or Sheets.
+
 ## Observability
 
 Operational endpoints sit outside `/api/v1` and are not part of the public API schema.
@@ -168,3 +177,5 @@ curl -s -X POST http://localhost:8080/api/v1/invitations \
 - `POST /gate/offline/reconcile` is idempotent per `(property_id, client_event_id)`: a replay reports
   `duplicate` and performs no second transition. A batch accepts 1–50 actions, each with `recorded_at`,
   `device_id`, and a supported action (`ENTRY_CONFIRM`, `EXIT_CONFIRM`, `MANUAL_OVERRIDE`).
+- The idempotency ledger row is claimed before the gate transition and committed with it, so concurrent replays
+  block instead of duplicating an audit event.

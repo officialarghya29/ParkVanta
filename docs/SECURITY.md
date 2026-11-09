@@ -50,6 +50,7 @@ Explicitly out of scope: facial recognition and any biometric processing.
 | Confirm entry / exit | ✅ | ✅ | ✅ | ✅ | — |
 | Manual override | — | ✅ | ✅ | ✅ | — |
 | View analytics | ✅ | ✅ | ✅ | ✅ | — |
+| View audit trail | ✅ | ✅ | — | — | — |
 
 Roles are enforced in FastAPI dependencies and again in services. Hiding a button is never the control.
 
@@ -118,7 +119,17 @@ metadata, and are written in the same transaction as the operation.
 - Society-wide offline exits use the explicit `property_id` from the reconcile request; an account with no
   assigned property is not forced through an invalid assertion.
 
-## 6.4 Metrics endpoint
+## 6.4 Audit console
+
+- `GET /audit-logs` is restricted to society admins and platform owners. Property managers, guards and residents
+  cannot read the ledger.
+- Every query is constrained to the caller's organization; filters are parameterized and pagination is capped
+  at 100 rows. Inverted time windows are rejected with `422`.
+- CSV export runs in the browser over the visible page, quotes every field, and prefixes spreadsheet formula
+  characters so metadata cannot execute when opened in Excel or Sheets.
+- The audit ledger is append-only through the API; no update or delete endpoint exists.
+
+## 6.5 Metrics endpoint
 
 - `/metrics` exposes aggregate email-outbox counts and worker heartbeat timestamps only; it never returns visitor
   data, email bodies or credentials.

@@ -7,7 +7,7 @@
 ![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
 ![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
-![Tests](https://img.shields.io/badge/verified-66%20backend%20%C2%B7%207%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-69%20backend%20%C2%B7%2010%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
 ![Telemetry](https://img.shields.io/badge/telemetry-Prometheus%20%C2%B7%20heartbeats-16A394?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
 
@@ -21,12 +21,16 @@
 
 > **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
 > approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
-> The repository contains **66 backend tests**, **7 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> The repository contains **69 backend tests**, **10 frontend unit tests**, **1 real-Chrome browser scenario** with an
 > offline network transition, plus recorded **read** and **write** load runs. Production onboarding includes a
-> first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, an email
-> outbox worker and SMTP-backed password reset. Access tokens stay in memory; gate actions survive reloads in
-> IndexedDB; SSE replay is backed by a 30-day PostgreSQL archive. Deferred work is listed in
-> [Known limitations](#known-limitations); nothing here is labelled live unless a test or endpoint proves it.
+> first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, a
+> society-scoped audit console with filtered CSV export, an email outbox worker and SMTP-backed password reset.
+> Access tokens stay in memory; gate actions survive reloads in IndexedDB; SSE replay is backed by a 30-day
+> PostgreSQL archive. Deferred work is listed in [Known limitations](#known-limitations); nothing here is labelled
+> live unless a test or endpoint proves it.
+>
+> **“Verified, not promised” is deliberate:** every capability below is backed by a test, an endpoint, or a
+> recorded run in this repository, rather than a roadmap claim.
 
 ---
 
@@ -65,17 +69,17 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 
 | Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Backend verification | **66 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
-| Frontend verification | **7 passed** | `vitest run` |
+| Backend verification | **69 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
+| Frontend verification | **10 passed** | `vitest run` |
 | Browser lifecycle | **1 passed** | Playwright · real Chrome |
 | Read load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
 | Read latency | **p50 90.66 ms · p95 168.51 ms · p99 236.39 ms** | 20 concurrent clients · 20.06 s |
 | Gate write cycles | **100 / 100 · 0 errors** | 300 real writes · `write-local.json` |
 | Contention proof | **18 / 18 allocations · 72 expected conflicts** | 6 free bays · 3 rounds · 0 duplicates |
 | Dependency audit | **0 known advisories** | pip-audit · npm audit · Ruff · Bandit |
-| API surface | **59 paths · 68 operations** | FastAPI OpenAPI introspection |
+| API surface | **60 paths · 69 operations** | FastAPI OpenAPI introspection |
 | Data model | **25 tables · 6 migrations** | SQLAlchemy metadata |
-| Initial client bundle | **106.48 kB gzip JS · 7.20 kB gzip CSS** | route-split production build |
+| Initial client bundle | **107.21 kB gzip JS · 7.38 kB gzip CSS** | route-split production build |
 
 </div>
 
@@ -109,6 +113,10 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 </td>
 </tr>
 </table>
+
+<img src="docs/assets/screenshot-audit.png" alt="Audit console with action, entity and time filters plus CSV export" width="100%" />
+
+<p align="center"><em>Audit console — society-scoped ledger, prefix filters, pagination and safe CSV export.</em></p>
 
 ---
 
@@ -302,7 +310,7 @@ Each gate cycle commits three times and emits events, so its latency is intentio
 read benchmark. The contention figure is the stronger proof: with six free bays, exactly six approvals may win —
 and across 90 attempts, exactly 18 did, with no duplicate active row for any slot.
 
-<img src="docs/assets/chart-verification.png" alt="Verification matrix: 66 backend tests, 7 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 69 backend tests, 10 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
 
 ---
 
@@ -356,7 +364,7 @@ Seeded by `make seed`; password **`ParkVanta@2026`** (override with `SEED_PASSWO
 | :--- | :--- | :--- |
 | `resident@skyline.dev` | Resident | Create and approve an invitation, open the QR pass |
 | `guard@skyline.dev` | Security guard | Verify, authorize, confirm entry, go offline, queue the exit |
-| `admin@skyline.dev` | Society admin | Capacity, utilisation, overstays, gate trail, inventory |
+| `admin@skyline.dev` | Society admin | Capacity, utilisation, overstays, gate trail, audit console, inventory |
 | `manager@skyline.dev` | Property manager | Same operations scope |
 | `superadmin@parkvanta.dev` | Platform owner | Organization-level access |
 
@@ -387,8 +395,8 @@ register at `/register`, select their apartment, and remain unverified until an 
 ## Verification
 
 ```bash
-make test                         # 66 backend tests on real PostgreSQL
-cd apps/web && npm test           # 7 frontend unit tests
+make test                         # 69 backend tests on real PostgreSQL
+cd apps/web && npm test           # 10 frontend unit tests
 cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
 cd apps/web && npm run build      # type-check + production bundle
 make load-test                    # read-path benchmark
@@ -398,8 +406,8 @@ make lint && make audit           # Ruff, Bandit, pip-audit and npm audit
 
 | Suite | Command | Result |
 | :--- | :--- | ---: |
-| Backend | `pytest -q` | **66 passed** |
-| Frontend unit | `npm test` | **7 passed** |
+| Backend | `pytest -q` | **69 passed** |
+| Frontend unit | `npm test` | **10 passed** |
 | Browser E2E | `npm run test:e2e` | **1 passed** |
 | Production build | `npm run build` | **passed** |
 | Read benchmark | `make load-test` | **3,912 requests · 0 errors** |
@@ -411,6 +419,7 @@ What the backend suite proves:
 - complete visitor lifecycle, duplicate scan rejection, plate mismatch, cancellation, no-slot approval;
 - refresh-token rotation/replay revocation, suspended accounts, cross-tenant 403s;
 - manual override reason enforcement and audit rows;
+- society-scoped audit console permissions, prefix/entity filters, pagination and time-window validation;
 - multi-thread concurrency proofs: eight simultaneous scans yield one authorization, eight refresh calls yield one successor, six replays of one offline action produce one audit event, and one allocation wins a free bay;
 - entry confirmation is rejected with `authorization_required` until an online authorization exists;
 - SSE ticket scoping, `text/event-stream` framing, Redis Stream retention and replay from `last_event_id`;
@@ -423,7 +432,8 @@ explicit property scoping for society-wide accounts;
   the vehicle-required entry policy.
 
 The Playwright scenario drives real Chrome through resident creation and approval → visitor QR → guard verify,
-authorize, confirm entry → **network loss** → queued exit → reconnect and reconciliation → admin overview.
+authorize, confirm entry → **network loss** → queued exit → reconnect and reconciliation → admin overview →
+audit console.
 
 Raw verification snapshot: [`docs/results/verification.json`](docs/results/verification.json).
 
@@ -450,7 +460,7 @@ Raw verification snapshot: [`docs/results/verification.json`](docs/results/verif
 parkvanta/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/routers/      # public · auth · tenancy · invitations · qr · parking · gate · events · analytics
+│   │   ├── api/v1/routers/      # public · auth · tenancy · invitations · qr · parking · gate · events · analytics · audit
 │   │   ├── core/                # settings · security · deps · errors · rate limit
 │   │   ├── database/            # engine · sessions · declarative base
 │   │   ├── models/              # 25-table domain model
@@ -480,7 +490,7 @@ parkvanta/
 
 ## API surface
 
-REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 paths, 68 operations**.
+REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **60 paths, 69 operations**.
 
 | Group | Representative endpoints |
 | :--- | :--- |
@@ -494,6 +504,7 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 | Offline | `POST /gate/offline/reconcile` — idempotent batch, per-action results |
 | Realtime | `POST /events/ticket` · `GET /events/stream?ticket=&last_event_id=` |
 | Analytics | `GET /analytics/overview` · `/parking-utilization` · `/visitor-trends` · `/overstays` |
+| Audit | `GET /audit-logs` — society-admin only, organization-scoped, filterable and paginated |
 | Notifications | `GET /notifications` · `/notifications/unread-count` · `POST /notifications/{id}/read` · `/read-all` |
 
 ## Security model
@@ -505,7 +516,8 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **59 pat
 - Login and refresh rate limiting (Redis sliding window, per-process fallback if Redis is unavailable).
 - `X-Forwarded-For` is only trusted when the immediate peer matches `TRUSTED_PROXIES`; validation errors never echo
   submitted inputs such as passwords.
-- Audit trail for approval, verification, entry, exit, overrides, slot and policy changes.
+- Audit trail for approval, verification, entry, exit, overrides, slot and policy changes. The audit console is
+  society-admin/platform-owner only, organization-scoped, and its CSV export neutralizes spreadsheet formulas.
 - Stream tickets are 2-minute, property-scoped JWTs; the access token never appears in a stream URL.
 - Offline entry is denied without a prior online authorization; replay is blocked by a unique ledger key.
 - Society join codes are 64-bit, admin-only to read/rotate, and expose only active property/apartment labels.

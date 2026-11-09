@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.routers import (
     analytics,
+    audit,
     auth,
     events,
     gate,
@@ -21,4 +22,5 @@ api_router.include_router(qr.router)
 api_router.include_router(parking.router)
 api_router.include_router(gate.router)
 api_router.include_router(analytics.router)
+api_router.include_router(audit.router)
 api_router.include_router(events.router)

@@ -312,6 +312,18 @@ export interface OfflineReconcileResponse {
   results: OfflineGateActionResult[];
 }
 
+export interface AuditLog {
+  id: string;
+  actor_user_id: string | null;
+  actor_name: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  ip_address: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface Policy {
   id: string;
   property_id: string;

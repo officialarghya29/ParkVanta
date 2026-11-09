@@ -1,4 +1,13 @@
-import { Activity, Building2, Car, LayoutDashboard, LogOut, ScanLine, ShieldCheck } from "lucide-react";
+import {
+  Activity,
+  Building2,
+  Car,
+  LayoutDashboard,
+  LogOut,
+  ScanLine,
+  ScrollText,
+  ShieldCheck,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { homeRouteFor, useAuth } from "../auth/AuthContext";
@@ -10,6 +19,7 @@ const NAV = [
   { to: "/guard", label: "Gate console", icon: ScanLine, roles: ["SECURITY_GUARD", "SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"] },
   { to: "/admin", label: "Operations", icon: LayoutDashboard, roles: ["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"] },
   { to: "/admin/inventory", label: "Inventory", icon: Building2, roles: ["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"] },
+  { to: "/admin/audit", label: "Audit trail", icon: ScrollText, roles: ["SOCIETY_ADMIN", "SUPER_ADMIN"] },
 ];
 
 const ROLE_LABEL: Record<string, string> = {

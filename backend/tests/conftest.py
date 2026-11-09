@@ -179,6 +179,10 @@ def world(db_session):
         db, organization_id=org.id, property_id=prop.id, email="guard@skyline.dev",
         name="Suresh Kumar", role=Role.SECURITY_GUARD,
     )
+    manager = _make_user(
+        db, organization_id=org.id, property_id=prop.id, email="manager@skyline.dev",
+        name="Vikram Menon", role=Role.PROPERTY_MANAGER,
+    )
     resident = _make_user(
         db, organization_id=org.id, property_id=prop.id, email="resident@skyline.dev",
         name="Arghya Bose", role=Role.RESIDENT, apartment_id=apartment.id,
@@ -203,6 +207,7 @@ def world(db_session):
         "service_slot_id": service_slot.id,
         "reserved_slot_id": reserved_slot.id,
         "admin_email": admin.email,
+        "manager_email": manager.email,
         "guard_email": guard.email,
         "resident_email": resident.email,
         "neighbour_email": neighbour.email,
@@ -223,6 +228,7 @@ def tokens(client, world):
         "resident": login(client, world["resident_email"])["access_token"],
         "guard": login(client, world["guard_email"])["access_token"],
         "admin": login(client, world["admin_email"])["access_token"],
+        "manager": login(client, world["manager_email"])["access_token"],
         "neighbour": login(client, world["neighbour_email"])["access_token"],
         "other_admin": login(client, world["other_admin_email"])["access_token"],
     }

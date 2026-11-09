@@ -14,6 +14,9 @@ import type { Role } from "./lib/types";
 const AdminPage = lazy(() =>
   import("./pages/AdminPage").then(({ AdminPage }) => ({ default: AdminPage })),
 );
+const AuditPage = lazy(() =>
+  import("./pages/AuditPage").then(({ AuditPage }) => ({ default: AuditPage })),
+);
 const GuardPage = lazy(() =>
   import("./pages/GuardPage").then(({ GuardPage }) => ({ default: GuardPage })),
 );
@@ -153,6 +156,14 @@ export default function App() {
                 element={
                   <Protected roles={["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}>
                     <InventoryPage />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/admin/audit"
+                element={
+                  <Protected roles={["SOCIETY_ADMIN", "SUPER_ADMIN"]}>
+                    <AuditPage />
                   </Protected>
                 }
               />

@@ -4,8 +4,8 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **66 passed** |
-| Frontend unit | `cd apps/web && npm test` | **7 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **69 passed** |
+| Frontend unit | `cd apps/web && npm test` | **10 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
 | Read benchmark | `make load-test` | **3,912 requests · 195.06 req/s · 0 errors** |
@@ -111,6 +111,11 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
 - Notifications are scoped to their owner, unread counts change on read, `read-all` clears the inbox, and another
   resident cannot mark someone else's notification.
 
+**Audit console** (`test_audit.py`)
+- Society admins can page the organization's audit ledger; guards and residents receive `403`, and another
+  society's rows are never returned.
+- Action-prefix filters, entity filters, pagination and inverted time-window rejection are covered.
+
 **Concurrency** (`test_concurrency.py`, `test_offline.py`)
 - Eight threads authorize the same pass simultaneously: exactly one `authorized`, seven `already_used`; one pass
   row is `CONSUMED`; one `ENTRY/AUTHORIZED` event exists.
@@ -194,6 +199,7 @@ The test performs the acceptance scenario without touching the database:
 7. The browser reloads the resident session and restores it from the httpOnly refresh cookie; no access token
    is present in localStorage.
 8. Society admin signs in and the overview renders capacity.
+9. The admin opens the audit console and sees the confirmed gate event.
 
 To run in CI without Google Chrome, install browsers and set `PLAYWRIGHT_CHANNEL=chromium`.
 
@@ -203,6 +209,7 @@ To run in CI without Google Chrome, install browsers and set `PLAYWRIGHT_CHANNEL
 - Enum-to-label formatting.
 - `datetime-local` conversion.
 - Offline queue batching splits 100 actions into 50-action reconcile requests without dropping or reordering them.
+- Audit CSV cells safely quote commas, quotes and newlines, and neutralize spreadsheet formula prefixes.
 
 The production build type-checks the entire client (`tsc --noEmit`).
 

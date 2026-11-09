@@ -329,7 +329,7 @@ export function InventoryPage() {
                         })
                       }
                     >
-                      {resident.is_verified ? "Suspend" : "Verify"}
+                      {resident.is_verified ? "Unverify" : "Verify"}
                     </Button>
                   </div>
                 </div>

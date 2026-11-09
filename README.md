@@ -7,7 +7,7 @@
 ![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
 ![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
-![Tests](https://img.shields.io/badge/verified-69%20backend%20%C2%B7%2010%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-75%20backend%20%C2%B7%2010%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
 ![Telemetry](https://img.shields.io/badge/telemetry-Prometheus%20%C2%B7%20heartbeats-16A394?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
 
@@ -21,7 +21,7 @@
 
 > **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
 > approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
-> The repository contains **69 backend tests**, **10 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> The repository contains **75 backend tests**, **10 frontend unit tests**, **1 real-Chrome browser scenario** with an
 > offline network transition, plus recorded **read** and **write** load runs. Production onboarding includes a
 > first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, a
 > society-scoped audit console with filtered CSV export, an email outbox worker and SMTP-backed password reset.
@@ -69,7 +69,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 
 | Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Backend verification | **69 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
+| Backend verification | **75 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
 | Frontend verification | **10 passed** | `vitest run` |
 | Browser lifecycle | **1 passed** | Playwright · real Chrome |
 | Read load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
@@ -79,7 +79,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 | Dependency audit | **0 known advisories** | pip-audit · npm audit · Ruff · Bandit |
 | API surface | **60 paths · 69 operations** | FastAPI OpenAPI introspection |
 | Data model | **25 tables · 6 migrations** | SQLAlchemy metadata |
-| Initial client bundle | **107.21 kB gzip JS · 7.38 kB gzip CSS** | route-split production build |
+| Initial client bundle | **107.22 kB gzip JS · 7.38 kB gzip CSS** | route-split production build |
 
 </div>
 
@@ -310,7 +310,7 @@ Each gate cycle commits three times and emits events, so its latency is intentio
 read benchmark. The contention figure is the stronger proof: with six free bays, exactly six approvals may win —
 and across 90 attempts, exactly 18 did, with no duplicate active row for any slot.
 
-<img src="docs/assets/chart-verification.png" alt="Verification matrix: 69 backend tests, 10 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 75 backend tests, 10 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
 
 ---
 
@@ -395,7 +395,7 @@ register at `/register`, select their apartment, and remain unverified until an 
 ## Verification
 
 ```bash
-make test                         # 69 backend tests on real PostgreSQL
+make test                         # 75 backend tests on real PostgreSQL
 cd apps/web && npm test           # 10 frontend unit tests
 cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
 cd apps/web && npm run build      # type-check + production bundle
@@ -406,7 +406,7 @@ make lint && make audit           # Ruff, Bandit, pip-audit and npm audit
 
 | Suite | Command | Result |
 | :--- | :--- | ---: |
-| Backend | `pytest -q` | **69 passed** |
+| Backend | `pytest -q` | **75 passed** |
 | Frontend unit | `npm test` | **10 passed** |
 | Browser E2E | `npm run test:e2e` | **1 passed** |
 | Production build | `npm run build` | **passed** |
@@ -421,7 +421,8 @@ What the backend suite proves:
 - manual override reason enforcement and audit rows;
 - society-scoped audit console permissions, prefix/entity filters, pagination and time-window validation;
 - multi-thread concurrency proofs: eight simultaneous scans yield one authorization, eight refresh calls yield one successor, six replays of one offline action produce one audit event, and one allocation wins a free bay;
-- entry confirmation is rejected with `authorization_required` until an online authorization exists;
+- entry confirmation is rejected with `authorization_required` until an online authorization exists, is idempotent for pedestrian visits, and rejects cancelled invitations;
+- resident registration requires the active property's exact join code, inactive properties deny pass verification, and unknown manual-override invitation ids return `404`;
 - SSE ticket scoping, `text/event-stream` framing, Redis Stream retention and replay from `last_event_id`;
 - offline exit reconciliation, duplicate replay, online-only entry confirmation, clock-skew rejection, and
 explicit property scoping for society-wide accounts;
@@ -520,7 +521,7 @@ REST under `/api/v1`, consistent error envelope, OpenAPI at `/docs` — **60 pat
   society-admin/platform-owner only, organization-scoped, and its CSV export neutralizes spreadsheet formulas.
 - Stream tickets are 2-minute, property-scoped JWTs; the access token never appears in a stream URL.
 - Offline entry is denied without a prior online authorization; replay is blocked by a unique ledger key.
-- Society join codes are 64-bit, admin-only to read/rotate, and expose only active property/apartment labels.
+- Society join codes are 64-bit, admin-only to read/rotate, and required again on registration for the selected active property; lookup exposes only apartment labels.
 - Password reset uses a single-use hashed token and configured SMTP; production returns 503 if delivery is absent.
 - Access tokens stay in JavaScript memory; the httpOnly refresh cookie restores the session after reload.
 - Realtime frames are archived in PostgreSQL before fan-out, with configurable retention and sequence replay.

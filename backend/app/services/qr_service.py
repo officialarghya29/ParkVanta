@@ -107,6 +107,9 @@ def verify_pass(
 
     qr_pass, invitation, visitor, vehicle, prop = row
 
+    if not prop.is_active:
+        return _deny("property_inactive", "This property is not accepting visitor entry.")
+
     if guard.role != Role.SUPER_ADMIN.value:
         if guard.organization_id != invitation.organization_id:
             return _deny("wrong_society", "This pass belongs to another society.")

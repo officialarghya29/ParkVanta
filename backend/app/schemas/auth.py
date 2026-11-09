@@ -23,6 +23,7 @@ class RegisterRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=20)
     property_id: UUID
     apartment_id: UUID
+    join_code: str = Field(min_length=16, max_length=16, pattern=r"^[A-Fa-f0-9]{16}$")
 
     _password = field_validator("password")(_validate_password)
 

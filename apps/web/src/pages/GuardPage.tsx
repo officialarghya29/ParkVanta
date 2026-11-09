@@ -277,17 +277,31 @@ export function GuardPage() {
     setScanning(false);
   }
 
-  const error = verify.error ?? authorize.error ?? confirmEntry.error ?? confirmExit.error;
+  const error =
+    verify.error ??
+    authorize.error ??
+    confirmEntry.error ??
+    confirmExit.error ??
+    override.error;
   const activeVisitors = active.data ?? (online ? [] : cachedActive);
 
   async function requestExit(visitor: ActiveVisitor) {
     if (!online) {
-      await enqueue({
-        client_event_id: newClientEventId(),
-        action: "EXIT_CONFIRM",
-        invitation_id: visitor.invitation_id,
-        recorded_at: new Date().toISOString(),
-      });
+      try {
+        await enqueue({
+          client_event_id: newClientEventId(),
+          action: "EXIT_CONFIRM",
+          invitation_id: visitor.invitation_id,
+          recorded_at: new Date().toISOString(),
+        });
+      } catch (error) {
+        setSyncMessage(
+          `Could not store the exit on this device. ${
+            error instanceof Error ? error.message : "Device storage is unavailable."
+          }`,
+        );
+        return;
+      }
       setPendingCount((await readQueue()).length);
       setCachedActive((previous) =>
         previous.filter((item) => item.invitation_id !== visitor.invitation_id),
@@ -304,15 +318,24 @@ export function GuardPage() {
   }
 
   async function queueManualOverride() {
-    await enqueue({
-      client_event_id: newClientEventId(),
-      action: "MANUAL_OVERRIDE",
-      reason: overrideReason,
-      direction: overrideDirection as "ENTRY" | "EXIT",
-      plate_number: plate || undefined,
-      invitation_id: verdict?.invitation_id ?? undefined,
-      recorded_at: new Date().toISOString(),
-    });
+    try {
+      await enqueue({
+        client_event_id: newClientEventId(),
+        action: "MANUAL_OVERRIDE",
+        reason: overrideReason,
+        direction: overrideDirection as "ENTRY" | "EXIT",
+        plate_number: plate || undefined,
+        invitation_id: verdict?.invitation_id ?? undefined,
+        recorded_at: new Date().toISOString(),
+      });
+    } catch (error) {
+      setSyncMessage(
+        `Could not store the override on this device. ${
+          error instanceof Error ? error.message : "Device storage is unavailable."
+        }`,
+      );
+      return;
+    }
     setPendingCount((await readQueue()).length);
     setOverrideReason("");
     setSyncMessage("Manual override queued for reconciliation.");

@@ -4,7 +4,7 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **69 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **75 passed** |
 | Frontend unit | `cd apps/web && npm test` | **10 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
@@ -101,12 +101,15 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
 - Manual override rejects short reasons and records an audit event.
 - Entry confirmation is rejected with `authorization_required` until an online authorization event exists, so an
   occupancy cannot be created by calling confirm directly.
+- Pedestrian confirmation returns nullable occupancy fields, is idempotent across retries, and is rejected after
+  cancellation. Unknown manual-override invitation ids return `404` instead of silently using a property override.
+- Pass verification denies an inactive property with `property_inactive`.
 
 **Onboarding, notifications and bootstrap** (`test_bootstrap.py`, `test_onboarding.py`, `test_notifications.py`)
 - Bootstrap creates exactly one organization, property, default policy and society admin; duplicate slug or email
   is refused.
 - A 16-character property join code resolves only apartment labels, registers a resident as unverified, and is
-  invalidated when rotated.
+  invalidated when rotated. Registration without the code returns `422`; a wrong code returns `404`.
 - Join-code retrieval is admin-only; guards receive 403.
 - Notifications are scoped to their owner, unread counts change on read, `read-all` clears the inbox, and another
   resident cannot mark someone else's notification.
@@ -162,6 +165,8 @@ These tests use thread barriers, independent SQLAlchemy sessions, and explicit r
 - Equal start/end times and invalid clock values such as `25:00` are rejected with `422`.
 - Enabling `require_vehicle_for_entry` makes a vehicle-less invitation fail gate verification with
   `vehicle_required`.
+- Slot-code uniqueness is case-insensitive (`v-01` conflicts with `V-01`), new codes are normalized to uppercase,
+  and unsupported vehicle classes are rejected with `422`.
 
 **Pilot preflight** (`test_pilot_preflight.py`)
 - A demo-seeded database with no worker heartbeats is blocked; production configuration with fresh heartbeats passes.

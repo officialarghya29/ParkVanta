@@ -173,6 +173,11 @@ def confirm_entry(
 
     if invitation.status == InvitationStatus.COMPLETED.value:
         raise ConflictError("This visit is already complete", code="already_exited")
+    if invitation.status != InvitationStatus.APPROVED.value:
+        raise ConflictError(
+            "Only an approved invitation can be confirmed at the gate",
+            code="invalid_state",
+        )
 
     # Physical entry is only a confirmation of an authorization that already
     # happened online. Without this check a caller could create an occupancy
@@ -195,6 +200,19 @@ def confirm_entry(
     already = False
     if invitation.vehicle_id is not None:
         occupancy, slot, already = parking_service.confirm_entry(db, invitation=invitation)
+    else:
+        # Pedestrian visits have no occupancy row, so their confirmation needs
+        # its own idempotency check to avoid duplicate events on retries.
+        already = (
+            db.scalar(
+                select(EntryExitEvent.id).where(
+                    EntryExitEvent.invitation_id == invitation.id,
+                    EntryExitEvent.direction == EventDirection.ENTRY.value,
+                    EntryExitEvent.decision == EventDecision.CONFIRMED.value,
+                )
+            )
+            is not None
+        )
 
     if not already:
         db.add(
@@ -349,6 +367,8 @@ def manual_override(
         raise ForbiddenError("Only gate staff can record a manual override")
 
     invitation = db.get(Invitation, invitation_id) if invitation_id else None
+    if invitation_id is not None and invitation is None:
+        raise NotFoundError("Invitation not found")
     if invitation is not None:
         _guard_scope(db, guard, invitation)
         policy = parking_service.get_policy(db, property_id=invitation.property_id)

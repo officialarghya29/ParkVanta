@@ -44,10 +44,10 @@ class ConfirmEntryRequest(BaseModel):
 
 
 class ConfirmEntryResponse(BaseModel):
-    occupancy_id: UUID
+    occupancy_id: UUID | None
     slot_code: str | None
-    slot_status: str
-    entered_at: datetime
+    slot_status: str | None
+    entered_at: datetime | None
     already_confirmed: bool = False
 
 

@@ -62,6 +62,7 @@ export function RegisterPage() {
           phone: form.phone.trim() || null,
           property_id: join.property_id,
           apartment_id: form.apartment_id,
+          join_code: code.trim().toUpperCase(),
         },
       });
       setCreated(user);
@@ -109,7 +110,7 @@ export function RegisterPage() {
               placeholder="A1B2C3D4E5F60718"
               autoComplete="off"
               required
-              minLength={8}
+              minLength={16}
               maxLength={16}
             />
           </Field>

@@ -30,6 +30,86 @@ def create_invitation(client, token, *, plate=PLATE, minutes_ahead=10, duration=
     return response.json()
 
 
+def create_pedestrian_invitation(client, token):
+    arrival = datetime.now(UTC) + timedelta(minutes=10)
+    response = client.post(
+        "/api/v1/invitations",
+        headers=auth(token),
+        json={
+            "visitor_name": "Pedestrian Guest",
+            "visitor_type": "GUEST",
+            "expected_arrival": arrival.isoformat(),
+            "expected_departure": (arrival + timedelta(hours=1)).isoformat(),
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def approve_and_authorize_pedestrian(client, tokens, invitation_id):
+    approval = client.post(
+        f"/api/v1/invitations/{invitation_id}/approve", headers=auth(tokens["resident"])
+    )
+    assert approval.status_code == 200, approval.text
+    authorized = client.post(
+        "/api/v1/gate/entry/authorize",
+        headers=auth(tokens["guard"]),
+        json={"token": approval.json()["pass_token"]},
+    )
+    assert authorized.status_code == 200, authorized.text
+
+
+def test_pedestrian_entry_confirmation_is_valid_and_idempotent(client, world, tokens, db_session):
+    invitation = create_pedestrian_invitation(client, tokens["resident"])
+    approve_and_authorize_pedestrian(client, tokens, invitation["id"])
+
+    first = client.post(
+        "/api/v1/gate/entry/confirm",
+        headers=auth(tokens["guard"]),
+        json={"invitation_id": invitation["id"]},
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["occupancy_id"] is None
+    assert first.json()["already_confirmed"] is False
+
+    repeated = client.post(
+        "/api/v1/gate/entry/confirm",
+        headers=auth(tokens["guard"]),
+        json={"invitation_id": invitation["id"]},
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["already_confirmed"] is True
+    assert (
+        db_session.query(EntryExitEvent)
+        .filter(
+            EntryExitEvent.invitation_id == invitation["id"],
+            EntryExitEvent.decision == "CONFIRMED",
+        )
+        .count()
+        == 1
+    )
+
+
+def test_cancellation_blocks_pedestrian_entry_confirmation(client, world, tokens):
+    invitation = create_pedestrian_invitation(client, tokens["resident"])
+    approve_and_authorize_pedestrian(client, tokens, invitation["id"])
+
+    cancelled = client.post(
+        f"/api/v1/invitations/{invitation['id']}/cancel",
+        headers=auth(tokens["resident"]),
+        json={"reason": "Visitor cancelled after authorization"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+
+    blocked = client.post(
+        "/api/v1/gate/entry/confirm",
+        headers=auth(tokens["guard"]),
+        json={"invitation_id": invitation["id"]},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "invalid_state"
+
+
 def test_complete_visitor_parking_lifecycle(client, world, tokens, db_session):
     invitation = create_invitation(client, tokens["resident"])
     assert invitation["status"] == "PENDING"
@@ -222,6 +302,26 @@ def test_cancellation_revokes_pass_and_releases_slot(client, world, tokens):
     assert availability["available"] == 4
 
 
+def test_inactive_property_blocks_pass_verification(client, world, tokens, db_session):
+    from app.models import Property
+
+    invitation = create_invitation(client, tokens["resident"])
+    approval = client.post(
+        f"/api/v1/invitations/{invitation['id']}/approve", headers=auth(tokens["resident"])
+    ).json()
+    prop = db_session.get(Property, world["property_id"])
+    prop.is_active = False
+    db_session.commit()
+
+    result = client.post(
+        "/api/v1/qr/verify",
+        headers=auth(tokens["guard"]),
+        json={"token": approval["pass_token"], "plate_number": PLATE},
+    )
+    assert result.status_code == 200
+    assert result.json()["reason_code"] == "property_inactive"
+
+
 def test_no_slot_available_blocks_approval(client, world, tokens, db_session):
     slot = db_session.get(ParkingSlot, world["slot_id"])
     slot.status = "MAINTENANCE"
@@ -260,6 +360,21 @@ def test_resident_only_sees_own_invitations(client, world, tokens, db_session):
     guard_listing = client.get("/api/v1/invitations", headers=auth(tokens["guard"])).json()
     guard_ids = {item["id"] for item in guard_listing["items"]}
     assert {own["id"], other["id"]}.issubset(guard_ids)
+
+
+def test_manual_override_rejects_an_unknown_invitation(client, world, tokens):
+    from uuid import uuid4
+
+    response = client.post(
+        "/api/v1/gate/manual-override",
+        headers=auth(tokens["guard"]),
+        json={
+            "reason": "Resident confirmed by intercom, pass token not working",
+            "direction": "ENTRY",
+            "invitation_id": str(uuid4()),
+        },
+    )
+    assert response.status_code == 404
 
 
 def test_manual_override_requires_reason_and_is_audited(client, world, tokens, db_session):

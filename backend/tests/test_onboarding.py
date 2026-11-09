@@ -29,6 +29,7 @@ def test_join_code_lookup_registration_and_rotation(client, world, tokens):
             "phone": "9876543210",
             "property_id": payload["property_id"],
             "apartment_id": apartment["id"],
+            "join_code": join_code,
         },
     )
     assert registration.status_code == 201, registration.text
@@ -59,6 +60,33 @@ def test_join_code_lookup_registration_and_rotation(client, world, tokens):
     assert rotated.json()["join_code"] != join_code
     assert client.get(f"/api/v1/public/join/{join_code}").status_code == 404
     assert client.get(f"/api/v1/public/join/{rotated.json()['join_code']}").status_code == 200
+
+
+def test_registration_requires_the_society_join_code(client, world):
+    missing = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "missing.code@example.com",
+            "password": "Resident123",
+            "full_name": "Missing Code",
+            "property_id": str(world["property_id"]),
+            "apartment_id": str(world["apartment_id"]),
+        },
+    )
+    assert missing.status_code == 422
+
+    wrong = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "wrong.code@example.com",
+            "password": "Resident123",
+            "full_name": "Wrong Code",
+            "property_id": str(world["property_id"]),
+            "apartment_id": str(world["apartment_id"]),
+            "join_code": "0000000000000000",
+        },
+    )
+    assert wrong.status_code == 404
 
 
 def test_only_admins_can_read_join_code(client, world, tokens):

@@ -59,6 +59,46 @@ def test_vehicle_required_policy_blocks_pedestrian_entry(client, world, tokens):
     assert verdict.json()["reason_code"] == "vehicle_required"
 
 
+def test_slot_codes_are_case_insensitive_and_vehicle_class_is_validated(client, world, tokens):
+    zones = client.get(
+        f"/api/v1/parking/zones?property_id={world['property_id']}",
+        headers=auth(tokens["admin"]),
+    ).json()
+    zone_id = next(zone["id"] for zone in zones if zone["name"] == "Visitor Bay")
+
+    duplicate = client.post(
+        "/api/v1/parking/slots",
+        headers=auth(tokens["admin"]),
+        json={
+            "property_id": str(world["property_id"]),
+            "zone_id": zone_id,
+            "code": "v-01",
+            "vehicle_category": "ANY",
+        },
+    )
+    assert duplicate.status_code == 409
+
+    created = client.post(
+        "/api/v1/parking/slots",
+        headers=auth(tokens["admin"]),
+        json={
+            "property_id": str(world["property_id"]),
+            "zone_id": zone_id,
+            "code": "v-99",
+            "vehicle_category": "ANY",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["code"] == "V-99"
+
+    invalid = client.patch(
+        f"/api/v1/parking/slots/{created.json()['id']}",
+        headers=auth(tokens["admin"]),
+        json={"vehicle_category": "SPACESHIP"},
+    )
+    assert invalid.status_code == 422
+
+
 def test_visitor_window_rejects_invalid_clock_values(client, world, tokens):
     response = client.patch(
         f"/api/v1/properties/{world['property_id']}/policy",

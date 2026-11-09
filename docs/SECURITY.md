@@ -71,7 +71,9 @@ Roles are enforced in FastAPI dependencies and again in services. Hiding a butto
 - Only society admins and property managers can read or rotate it.
 - The public lookup returns the property name/address and apartment labels needed to register; it never returns
   residents, contact details, occupancy or parking inventory.
-- Registration still requires an explicit apartment id from that lookup; the account starts `is_verified=False`.
+- Registration requires the exact join code again alongside the property and apartment ids; a missing code is
+  rejected by schema validation, and a wrong code or inactive property returns a generic `404` without revealing
+  whether the property exists. The account starts `is_verified=False`.
 - Rotating the code immediately invalidates the previous value.
 
 ## 5. Tenant isolation
@@ -113,8 +115,10 @@ metadata, and are written in the same transaction as the operation.
 
 ## 6.3 Entry confirmation and authorization
 
-- `POST /gate/entry/confirm` requires an existing `ENTRY/AUTHORIZED` event for the invitation. A caller cannot
-  create an occupancy directly and bypass the single-use pass.
+- `POST /gate/entry/confirm` requires an existing `ENTRY/AUTHORIZED` event and an invitation still in `APPROVED`
+  state. A caller cannot create an occupancy directly, bypass the single-use pass, or confirm a cancelled visit.
+- Pedestrian entries have no occupancy row; repeated confirmation is idempotent and produces one `CONFIRMED` event.
+- Pass verification rejects passes for an inactive property before evaluating the visit.
 - Offline entry confirmation applies the same check before calling the normal gate service.
 - Society-wide offline exits use the explicit `property_id` from the reconcile request; an account with no
   assigned property is not forced through an invalid assertion.
@@ -125,6 +129,8 @@ metadata, and are written in the same transaction as the operation.
   cannot read the ledger.
 - Every query is constrained to the caller's organization; filters are parameterized and pagination is capped
   at 100 rows. Inverted time windows are rejected with `422`.
+- Slot updates write their audit row against the slot's property organization, not the actor's default
+  organization; slot codes are normalized and duplicate checks are case-insensitive.
 - CSV export runs in the browser over the visible page, quotes every field, and prefixes spreadsheet formula
   characters so metadata cannot execute when opened in Excel or Sheets.
 - The audit ledger is append-only through the API; no update or delete endpoint exists.

@@ -20,7 +20,7 @@ from app.models import (
     User,
 )
 from app.models.entities import generate_join_code
-from app.models.enums import Role, SlotStatus
+from app.models.enums import SLOT_ANY_VEHICLE, Role, SlotStatus
 from app.schemas.auth import ResidentUpdateRequest, StaffCreateRequest, UserOut
 from app.schemas.common import Page
 from app.schemas.tenancy import (
@@ -443,9 +443,14 @@ def create_slot(payload: SlotCreate, db: Annotated[Session, Depends(get_db)], us
     if vehicle_category not in {"ANY", "TWO_WHEELER", "FOUR_WHEELER", "EV", "OVERSIZED"}:
         raise ValidationError("Unsupported vehicle category")
 
+    code = payload.code.strip().upper()
+    if not code:
+        raise ValidationError("Parking slot code cannot be blank")
+
     if db.scalar(
         select(ParkingSlot.id).where(
-            ParkingSlot.property_id == payload.property_id, ParkingSlot.code == payload.code
+            ParkingSlot.property_id == payload.property_id,
+            func.upper(ParkingSlot.code) == code,
         )
     ):
         raise ConflictError("A slot with this code already exists")
@@ -453,7 +458,7 @@ def create_slot(payload: SlotCreate, db: Annotated[Session, Depends(get_db)], us
     slot = ParkingSlot(
         property_id=payload.property_id,
         zone_id=zone.id,
-        code=payload.code.upper(),
+        code=code,
         category=zone.category,
         vehicle_category=vehicle_category,
         notes=payload.notes,
@@ -497,7 +502,7 @@ def update_slot(
     slot = db.get(ParkingSlot, slot_id)
     if slot is None:
         raise NotFoundError("Parking slot not found")
-    _property_for(db, user, slot.property_id)
+    prop = _property_for(db, user, slot.property_id)
 
     if payload.status is not None:
         if slot.status in {SlotStatus.OCCUPIED.value, SlotStatus.RESERVED.value}:
@@ -505,7 +510,16 @@ def update_slot(
         slot.status = payload.status
     if payload.vehicle_category is not None:
         value = payload.vehicle_category
-        slot.vehicle_category = value.value if hasattr(value, "value") else value
+        value = value.value if hasattr(value, "value") else value
+        if value not in {
+            SLOT_ANY_VEHICLE,
+            "TWO_WHEELER",
+            "FOUR_WHEELER",
+            "EV",
+            "OVERSIZED",
+        }:
+            raise ValidationError("Unsupported vehicle category")
+        slot.vehicle_category = value
     if payload.notes is not None:
         slot.notes = payload.notes
 
@@ -513,7 +527,7 @@ def update_slot(
         db,
         action="parking.slot_updated",
         entity_type="parking_slot",
-        organization_id=user.organization_id,
+        organization_id=prop.organization_id,
         actor_user_id=user.id,
         entity_id=slot.id,
         details=payload.model_dump(exclude_none=True),
@@ -537,7 +551,7 @@ def update_policy(
     db: Annotated[Session, Depends(get_db)],
     user: AdminUser,
 ) -> PolicyOut:
-    _property_for(db, user, property_id)
+    prop = _property_for(db, user, property_id)
     policy = parking_service.ensure_policy(db, property_id=property_id)
     for field, value in payload.model_dump(exclude_none=True).items():
         setattr(policy, field, value)
@@ -547,7 +561,7 @@ def update_policy(
         db,
         action="policy.updated",
         entity_type="society_policy",
-        organization_id=user.organization_id,
+        organization_id=prop.organization_id,
         actor_user_id=user.id,
         entity_id=policy.id,
         details=payload.model_dump(exclude_none=True),

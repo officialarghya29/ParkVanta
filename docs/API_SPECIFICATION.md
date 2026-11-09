@@ -15,7 +15,7 @@ Authentication: `Authorization: Bearer <access_token>`. The refresh token is set
 
 | Method | Path | Auth | Notes |
 | :--- | :--- | :--- | :--- |
-| POST | `/auth/register` | public | Resident self-registration; account starts unverified |
+| POST | `/auth/register` | public | Resident self-registration with property `join_code`; account starts unverified |
 | POST | `/auth/login` | public | Rate limited; returns access + refresh tokens |
 | POST | `/auth/refresh` | cookie/body | Rotates the refresh token; replay revokes the family |
 | POST | `/auth/logout` | any | Revokes the presented refresh token |
@@ -29,7 +29,7 @@ Authentication: `Authorization: Bearer <access_token>`. The refresh token is set
 | Method | Path | Auth | Notes |
 | :--- | :--- | :--- | :--- |
 | GET | `/public/join/{join_code}` | public | Property name/address and apartment labels for a valid code |
-| POST | `/auth/register` | public | Creates an unverified resident for a returned property/apartment id |
+| POST | `/auth/register` | public | Creates an unverified resident for a returned property/apartment id; requires the same 16-character `join_code` |
 
 ## Society, property and inventory
 
@@ -86,9 +86,9 @@ Authentication: `Authorization: Bearer <access_token>`. The refresh token is set
 | Method | Path | Behaviour |
 | :--- | :--- | :--- |
 | POST | `/gate/entry/authorize` | Verifies + consumes the pass atomically; 409 on duplicate |
-| POST | `/gate/entry/confirm` | Requires a prior online `AUTHORIZED` event; creates occupancy, slot → `OCCUPIED` |
+| POST | `/gate/entry/confirm` | Requires an approved visit and prior online `AUTHORIZED` event; creates occupancy, slot → `OCCUPIED`; pedestrian confirmation is idempotent |
 | POST | `/gate/exit/confirm` | Releases occupancy and slot; 409 if already exited |
-| POST | `/gate/manual-override` | Reason ≥ 10 chars, audited |
+| POST | `/gate/manual-override` | Reason ≥ 10 chars, audited; unknown invitation id → `404` |
 | POST | `/gate/offline/reconcile` | Idempotent batch of queued exits/overrides/authorized entry confirmations |
 | GET | `/gate/active-visitors` | Vehicles currently inside |
 | GET | `/gate/recent-activity` | Last gate decisions |
@@ -171,7 +171,8 @@ curl -s -X POST http://localhost:8080/api/v1/invitations \
 ## Idempotency notes
 
 - `POST /parking/allocate` returns the existing active reservation instead of double-allocating.
-- `POST /gate/entry/confirm` returns the existing occupancy with `already_confirmed: true`.
+- `POST /gate/entry/confirm` returns the existing occupancy with `already_confirmed: true`; pedestrian visits
+  return `null` occupancy/slot fields and the same idempotency flag.
 - `POST /gate/exit/confirm` is deliberately **not** idempotent: a second call returns `409 already_exited`
   so repeated barrier operations stay visible.
 - `POST /gate/offline/reconcile` is idempotent per `(property_id, client_event_id)`: a replay reports

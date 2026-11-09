@@ -55,8 +55,13 @@ def _issue_tokens(db: Session, user: User) -> tuple[str, str]:
 
 def register_resident(db: Session, payload: RegisterRequest) -> User:
     prop = db.get(Property, payload.property_id)
-    if prop is None or not prop.is_active:
-        raise NotFoundError("Property not found")
+    if (
+        prop is None
+        or not prop.is_active
+        or prop.join_code != payload.join_code.strip().upper()
+    ):
+        # The join code is a capability; do not reveal whether the property exists.
+        raise NotFoundError("Join code not found or the property is inactive")
     apartment = db.get(Apartment, payload.apartment_id)
     if apartment is None or apartment.property_id != prop.id:
         raise ValidationError("Apartment does not belong to the selected property")

@@ -2,6 +2,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
+from uuid import UUID
 
 import pytest
 from sqlalchemy import select
@@ -19,7 +20,7 @@ from app.models import (
     User,
 )
 from app.models.enums import PassStatus, ReservationStatus
-from app.services import auth_service, gate_service, parking_service
+from app.services import auth_service, gate_service, invitation_service, parking_service
 
 
 def auth(token: str) -> dict:
@@ -197,6 +198,80 @@ def test_password_reset_token_is_consumed_under_a_row_lock(world, db_session):
         db_session.commit()
         with pytest.raises(ValidationError):
             future.result(timeout=5)
+
+
+def test_approve_and_reject_cannot_both_succeed(client, world, tokens, db_session):
+    invitation = _create_pending_invitation(client, tokens["resident"], "KA06IJ4444")
+    invitation_id = UUID(invitation["id"])
+    resident_id = db_session.scalar(
+        select(User.id).where(User.email == world["resident_email"])
+    )
+    assert resident_id is not None
+
+    locker = SessionLocal()
+    locked = locker.scalar(
+        select(Invitation).where(Invitation.id == invitation_id).with_for_update()
+    )
+    assert locked is not None
+    outcomes: list[str] = []
+
+    def approve() -> None:
+        db = SessionLocal()
+        try:
+            resident = db.get(User, resident_id)
+            invitation_service.approve_invitation(
+                db, user=resident, invitation_id=invitation_id
+            )
+            outcomes.append("approved")
+        except AppError as exc:
+            outcomes.append(f"error:{exc.code}")
+        finally:
+            db.close()
+
+    def reject() -> None:
+        db = SessionLocal()
+        try:
+            resident = db.get(User, resident_id)
+            invitation_service.reject_invitation(
+                db,
+                user=resident,
+                invitation_id=invitation_id,
+                reason="Resident rejected concurrently",
+            )
+            outcomes.append("rejected")
+        except AppError as exc:
+            outcomes.append(f"error:{exc.code}")
+        finally:
+            db.close()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            approve_future = pool.submit(approve)
+            # Both callers must start while the row is locked. The reject path
+            # must re-check the state after it acquires the row lock.
+            time.sleep(0.2)
+            reject_future = pool.submit(reject)
+            time.sleep(0.3)
+            locker.commit()
+            approve_future.result(timeout=10)
+            reject_future.result(timeout=10)
+    finally:
+        locker.rollback()
+        locker.close()
+
+    assert sum(outcome in {"approved", "rejected"} for outcome in outcomes) == 1, outcomes
+
+    db_session.expire_all()
+    stored = db_session.get(Invitation, invitation_id)
+    assert stored is not None
+    pass_row = db_session.scalar(
+        select(QRPass).where(QRPass.invitation_id == invitation_id)
+    )
+    if stored.status == "APPROVED":
+        assert pass_row is not None
+    else:
+        assert stored.status == "REJECTED"
+        assert pass_row is None
 
 
 def test_concurrent_allocations_never_double_book_a_slot(client, world, tokens):

@@ -48,6 +48,13 @@ def _scope(user: User, property_id: UUID | None) -> UUID | None:
     return property_id
 
 
+def _validated_scope(db: Session, user: User, property_id: UUID | None) -> UUID | None:
+    """Validate a caller-supplied property before it reaches a list query."""
+    if property_id is not None:
+        assert_property_access(db, user, property_id)
+    return _scope(user, property_id)
+
+
 @router.get("/availability", response_model=AvailabilityOut)
 def availability(
     db: Annotated[Session, Depends(get_db)],
@@ -112,7 +119,7 @@ def list_reservations(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Page[ReservationOut]:
-    target = _scope(user, property_id)
+    target = _validated_scope(db, user, property_id)
     base = (
         select(ParkingReservation, ParkingSlot, Visitor)
         .join(ParkingSlot, ParkingReservation.slot_id == ParkingSlot.id)
@@ -159,7 +166,7 @@ def list_occupancies(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Page[OccupancyOut]:
-    target = _scope(user, property_id)
+    target = _validated_scope(db, user, property_id)
     base = (
         select(ParkingOccupancy, ParkingSlot, Visitor, Vehicle)
         .join(ParkingSlot, ParkingOccupancy.slot_id == ParkingSlot.id)
@@ -233,13 +240,23 @@ def release_occupancy(
             Invitation.id == released.invitation_id
         )
     )
+    vehicle = db.scalar(
+        select(Vehicle)
+        .join(Invitation, Invitation.vehicle_id == Vehicle.id)
+        .where(Invitation.id == released.invitation_id)
+    )
+    event_service.publish_event(
+        "parking.updated",
+        property_id=released.property_id,
+        data={"invitation_id": str(released.invitation_id), "reason": "occupancy_released"},
+    )
     return OccupancyOut(
         id=released.id,
         slot_id=slot.id,
         slot_code=slot.code,
         invitation_id=released.invitation_id,
         visitor_name=visitor.name if visitor else "Visitor",
-        vehicle_registration=None,
+        vehicle_registration=vehicle.registration_number if vehicle else None,
         status=released.status,
         entered_at=released.entered_at,
         exited_at=released.exited_at,
@@ -253,7 +270,7 @@ def available_slots(
     user: StaffUser,
     property_id: UUID | None = Query(default=None),
 ) -> list[dict]:
-    target = _scope(user, property_id)
+    target = _validated_scope(db, user, property_id)
     stmt = select(ParkingSlot).where(ParkingSlot.status == SlotStatus.AVAILABLE.value)
     if target is not None:
         stmt = stmt.where(ParkingSlot.property_id == target)

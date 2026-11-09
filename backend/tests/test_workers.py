@@ -12,6 +12,8 @@ from app.models import (
     Notification,
     ParkingOccupancy,
     ParkingReservation,
+    ParkingSlot,
+    QRPass,
     RealtimeEvent,
     User,
     Visitor,
@@ -22,7 +24,9 @@ from app.models.enums import (
     NotificationChannel,
     NotificationStatus,
     OccupancyStatus,
+    PassStatus,
     ReservationStatus,
+    SlotStatus,
 )
 from app.services import mail_service, notification_service, worker_service
 from app.workers import expiry as expiry_worker
@@ -132,6 +136,66 @@ def test_expiry_sweep_flags_overstay_and_queues_resident_notification(world, db_
     assert email[0].status == NotificationStatus.PENDING.value
     assert len(in_app) == 1
     assert "overstay" in in_app[0].title.lower()
+
+
+def test_expiry_sweep_releases_an_expired_reservation_and_its_active_pass(
+    world, db_session
+):
+    now = utcnow()
+    resident = _resident(db_session, world)
+    visitor = Visitor(
+        organization_id=world["org_id"],
+        property_id=world["property_id"],
+        name="Expired Guest",
+    )
+    db_session.add(visitor)
+    db_session.flush()
+    invitation = Invitation(
+        organization_id=world["org_id"],
+        property_id=world["property_id"],
+        resident_user_id=resident.id,
+        apartment_id=world["apartment_id"],
+        visitor_id=visitor.id,
+        visitor_type="GUEST",
+        expected_arrival=now - timedelta(hours=3),
+        expected_departure=now - timedelta(hours=2),
+        status=InvitationStatus.APPROVED.value,
+        approved_at=now - timedelta(hours=3),
+    )
+    db_session.add(invitation)
+    db_session.flush()
+    reservation = ParkingReservation(
+        organization_id=world["org_id"],
+        property_id=world["property_id"],
+        slot_id=world["slot_id"],
+        invitation_id=invitation.id,
+        status=ReservationStatus.ACTIVE.value,
+        reserved_from=now - timedelta(hours=3),
+        reserved_until=now - timedelta(minutes=1),
+    )
+    db_session.add(reservation)
+    qr_pass = QRPass(
+        organization_id=world["org_id"],
+        invitation_id=invitation.id,
+        token_hash="a" * 64,
+        expires_at=now - timedelta(minutes=1),
+        status=PassStatus.ACTIVE.value,
+    )
+    db_session.add(qr_pass)
+    slot = db_session.get(ParkingSlot, world["slot_id"])
+    assert slot is not None
+    slot.status = SlotStatus.RESERVED.value
+    db_session.commit()
+
+    result = expiry_worker.run_expiry_sweep(db_session)
+
+    db_session.expire_all()
+    assert db_session.get(ParkingReservation, reservation.id).status == "EXPIRED"
+    assert db_session.get(ParkingSlot, slot.id).status == "AVAILABLE"
+    assert db_session.get(Invitation, invitation.id).status == "EXPIRED"
+    assert db_session.get(QRPass, qr_pass.id).status == "EXPIRED"
+    assert result["expired_reservations"] == 1
+    assert result["expired_passes"] == 1
 
 
 def test_expiry_sweep_skips_rows_locked_by_another_worker(world, db_session):

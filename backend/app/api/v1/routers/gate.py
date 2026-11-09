@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
-from app.core.deps import client_ip, require_roles
+from app.core.deps import assert_property_access, client_ip, require_roles
 from app.core.errors import ValidationError
 from app.database.session import get_db
 from app.models import User
@@ -157,6 +157,8 @@ def active_visitors(
 ) -> list[ActiveVisitorOut]:
     if guard.property_id is None and property_id is None and guard.role != Role.SUPER_ADMIN.value:
         raise ValidationError("property_id is required for society-wide accounts")
+    if property_id is not None:
+        assert_property_access(db, guard, property_id)
     rows = gate_service.active_visitors(db, guard=guard, property_id=property_id)
     return [ActiveVisitorOut(**row) for row in rows]
 

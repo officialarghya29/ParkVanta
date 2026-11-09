@@ -7,7 +7,7 @@
 ![Status](https://img.shields.io/badge/status-pilot--ready%20core-16A394?style=for-the-badge)
 ![Backend](https://img.shields.io/badge/backend-FastAPI%20%C2%B7%20PostgreSQL-101B2D?style=for-the-badge)
 ![Surface](https://img.shields.io/badge/surface-React%2019%20%C2%B7%20TypeScript-16A394?style=for-the-badge)
-![Tests](https://img.shields.io/badge/verified-75%20backend%20%C2%B7%2010%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
+![Tests](https://img.shields.io/badge/verified-88%20backend%20%C2%B7%2011%20unit%20%C2%B7%201%20browser-101B2D?style=for-the-badge)
 ![Telemetry](https://img.shields.io/badge/telemetry-Prometheus%20%C2%B7%20heartbeats-16A394?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-proprietary%20%C2%B7%20ParkVanta%20Team-101B2D?style=for-the-badge)
 
@@ -21,7 +21,7 @@
 
 > **Current state — verified, not promised.** The full visitor lifecycle runs against PostgreSQL: invitation →
 > approval → single-use QR → bay reservation → online authorization → entry confirmation → exit → release.
-> The repository contains **75 backend tests**, **10 frontend unit tests**, **1 real-Chrome browser scenario** with an
+> The repository contains **88 backend tests**, **11 frontend unit tests**, **1 real-Chrome browser scenario** with an
 > offline network transition, plus recorded **read** and **write** load runs. Production onboarding includes a
 > first-admin bootstrap, society join codes, resident verification, a read/unread notification inbox, a
 > society-scoped audit console with filtered CSV export, an email outbox worker and SMTP-backed password reset.
@@ -69,8 +69,8 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 
 | Signal | Recorded result | Evidence |
 | :--- | :--- | :--- |
-| Backend verification | **75 passed · 0 failed** | `pytest -q` on PostgreSQL 16 |
-| Frontend verification | **10 passed** | `vitest run` |
+| Backend verification | **88 passed · 0 failed · 86% coverage** | `pytest -q` on PostgreSQL 16 |
+| Frontend verification | **11 passed** | `vitest run` |
 | Browser lifecycle | **1 passed** | Playwright · real Chrome |
 | Read load run | **3,912 requests · 195.06 req/s** | `docs/benchmarks/local-20c.json` |
 | Read latency | **p50 90.66 ms · p95 168.51 ms · p99 236.39 ms** | 20 concurrent clients · 20.06 s |
@@ -79,7 +79,7 @@ Most visitor tools stop at *approval*. ParkVanta treats **parking as the product
 | Dependency audit | **0 known advisories** | pip-audit · npm audit · Ruff · Bandit |
 | API surface | **60 paths · 69 operations** | FastAPI OpenAPI introspection |
 | Data model | **25 tables · 6 migrations** | SQLAlchemy metadata |
-| Initial client bundle | **107.22 kB gzip JS · 7.38 kB gzip CSS** | route-split production build |
+| Initial client bundle | **107.23 kB gzip JS · 7.38 kB gzip CSS** | route-split production build |
 
 </div>
 
@@ -310,7 +310,7 @@ Each gate cycle commits three times and emits events, so its latency is intentio
 read benchmark. The contention figure is the stronger proof: with six free bays, exactly six approvals may win —
 and across 90 attempts, exactly 18 did, with no duplicate active row for any slot.
 
-<img src="docs/assets/chart-verification.png" alt="Verification matrix: 75 backend tests, 10 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
+<img src="docs/assets/chart-verification.png" alt="Verification matrix: 88 backend tests, 11 frontend tests, 1 browser test, 0 failures, concurrency proofs" width="100%" />
 
 ---
 
@@ -395,8 +395,8 @@ register at `/register`, select their apartment, and remain unverified until an 
 ## Verification
 
 ```bash
-make test                         # 75 backend tests on real PostgreSQL
-cd apps/web && npm test           # 10 frontend unit tests
+make test                         # 88 backend tests on real PostgreSQL
+cd apps/web && npm test           # 11 frontend unit tests
 cd apps/web && npm run test:e2e   # 1 Playwright lifecycle scenario (fresh E2E DB)
 cd apps/web && npm run build      # type-check + production bundle
 make load-test                    # read-path benchmark
@@ -406,8 +406,8 @@ make lint && make audit           # Ruff, Bandit, pip-audit and npm audit
 
 | Suite | Command | Result |
 | :--- | :--- | ---: |
-| Backend | `pytest -q` | **75 passed** |
-| Frontend unit | `npm test` | **10 passed** |
+| Backend | `pytest -q` | **88 passed · 86% coverage** |
+| Frontend unit | `npm test` | **11 passed** |
 | Browser E2E | `npm run test:e2e` | **1 passed** |
 | Production build | `npm run build` | **passed** |
 | Read benchmark | `make load-test` | **3,912 requests · 0 errors** |
@@ -420,7 +420,10 @@ What the backend suite proves:
 - refresh-token rotation/replay revocation, suspended accounts, cross-tenant 403s;
 - manual override reason enforcement and audit rows;
 - society-scoped audit console permissions, prefix/entity filters, pagination and time-window validation;
-- multi-thread concurrency proofs: eight simultaneous scans yield one authorization, eight refresh calls yield one successor, six replays of one offline action produce one audit event, and one allocation wins a free bay;
+- five multi-thread concurrency proofs: eight simultaneous scans yield one authorization, eight refresh calls yield one successor, six replays of one offline action produce one audit event, one allocation wins a free bay, and an approve/reject race produces exactly one terminal invitation state;
+- tenant traversal is rejected for account provisioning, parking lists, gate active-visitor lists and pass inspection; inactive properties block invitation creation, approval and allocation;
+- analytics count one confirmed entry per visit, rejected pending invitations release manual reservations, and slot-code exits are case-insensitive;
+- stale reservations and passes expire together and return the bay to inventory;
 - entry confirmation is rejected with `authorization_required` until an online authorization exists, is idempotent for pedestrian visits, and rejects cancelled invitations;
 - resident registration requires the active property's exact join code, inactive properties deny pass verification, and unknown manual-override invitation ids return `404`;
 - SSE ticket scoping, `text/event-stream` framing, Redis Stream retention and replay from `last_event_id`;

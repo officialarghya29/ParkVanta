@@ -222,6 +222,15 @@ def create_staff_account(db: Session, admin: User, payload: StaffCreateRequest) 
                 raise NotFoundError("Property not found")
             organization_id = prop.organization_id
 
+    if (
+        prop is not None
+        and admin.role != Role.SUPER_ADMIN.value
+        and prop.organization_id != admin.organization_id
+    ):
+        # Resolving a property through an apartment must not become a tenant
+        # escape hatch for society administrators.
+        raise NotFoundError("Property not found")
+
     user = User(
         organization_id=organization_id,
         property_id=prop.id if prop is not None else None,

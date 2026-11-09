@@ -37,6 +37,8 @@ export function useEventStream(
   handler.current = onEvent;
 
   useEffect(() => {
+    cursor.current = null;
+    setConnected(false);
     if (!propertyId) return;
     let source: EventSource | null = null;
     let reconnect: number | undefined;

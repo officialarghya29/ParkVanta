@@ -96,12 +96,21 @@ function validAction(item: QueuedGateAction): boolean {
   );
 }
 
-function fallbackWriteQueue(actions: QueuedGateAction[]): void {
+function fallbackWriteQueue(actions: QueuedGateAction[]): boolean {
   try {
     window.localStorage.setItem(LEGACY_QUEUE_KEY, JSON.stringify(actions.slice(-100)));
+    return true;
   } catch {
-    // Storage can be unavailable in private mode; the in-memory UI still reflects intent.
+    return false;
   }
+}
+
+export function dedupeActions(actions: QueuedGateAction[]): QueuedGateAction[] {
+  const unique = new Map<string, QueuedGateAction>();
+  for (const action of actions) {
+    if (validAction(action)) unique.set(action.client_event_id, action);
+  }
+  return [...unique.values()];
 }
 
 export function chunkActions<T>(
@@ -146,8 +155,7 @@ export async function readQueue(): Promise<QueuedGateAction[]> {
         // Ignore storage restrictions.
       }
     }
-    return [...stored, ...migrated]
-      .filter(validAction)
+    return dedupeActions([...stored, ...migrated])
       .sort((a, b) => a.recorded_at.localeCompare(b.recorded_at))
       .slice(-100);
   } catch {
@@ -166,7 +174,9 @@ export async function enqueue(action: QueuedGateAction): Promise<void> {
       }
     }
   } catch {
-    fallbackWriteQueue(next);
+    if (!fallbackWriteQueue(next)) {
+      throw new Error("Device storage is unavailable");
+    }
   }
 }
 

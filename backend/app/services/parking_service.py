@@ -12,6 +12,7 @@ from app.models import (
     ParkingReservation,
     ParkingSlot,
     ParkingZone,
+    Property,
     SocietyPolicy,
     Vehicle,
 )
@@ -79,6 +80,24 @@ def allocate_for_invitation(
     the same slot; the partial unique index on active reservations is the
     database-level backstop.
     """
+    if invitation.status in {
+        InvitationStatus.REJECTED.value,
+        InvitationStatus.CANCELLED.value,
+        InvitationStatus.EXPIRED.value,
+        InvitationStatus.COMPLETED.value,
+    }:
+        raise ConflictError(
+            f"An invitation in state {invitation.status} cannot be allocated a parking slot.",
+            code="invalid_state",
+        )
+
+    prop = db.get(Property, invitation.property_id)
+    if prop is None or not prop.is_active:
+        raise ConflictError(
+            "This property is not accepting visitor parking.",
+            code="property_inactive",
+        )
+
     existing = db.scalar(
         select(ParkingReservation).where(
             ParkingReservation.invitation_id == invitation.id,
@@ -209,7 +228,10 @@ def release_occupancy(
     if invitation_id is not None:
         stmt = stmt.where(ParkingOccupancy.invitation_id == invitation_id)
     elif slot_code is not None:
-        stmt = stmt.where(ParkingSlot.code == slot_code)
+        normalized = slot_code.strip().upper()
+        if not normalized:
+            raise ValidationError("Slot code cannot be blank")
+        stmt = stmt.where(ParkingSlot.code == normalized)
     else:
         raise ValidationError("Provide an invitation or a slot code")
 

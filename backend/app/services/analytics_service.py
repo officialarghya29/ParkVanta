@@ -177,7 +177,7 @@ def visitor_trends(db: Session, *, property_id: UUID, days: int = 14) -> list[di
             EntryExitEvent.property_id == property_id,
             EntryExitEvent.created_at >= start_dt,
             EntryExitEvent.decision.in_(
-                [EventDecision.AUTHORIZED.value, EventDecision.CONFIRMED.value, EventDecision.RELEASED.value]
+                [EventDecision.CONFIRMED.value, EventDecision.RELEASED.value]
             ),
         )
         .group_by(func.date(EntryExitEvent.created_at), EntryExitEvent.direction)

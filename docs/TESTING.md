@@ -4,8 +4,9 @@
 
 | Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend | `cd backend && ../.venv/bin/pytest -q` | **75 passed** |
-| Frontend unit | `cd apps/web && npm test` | **10 passed** |
+| Backend | `cd backend && ../.venv/bin/pytest -q` | **88 passed** |
+| Backend coverage | `coverage run --source=app -m pytest -q` | **86% line coverage** |
+| Frontend unit | `cd apps/web && npm test` | **11 passed** |
 | Frontend production build | `cd apps/web && npm run build` | **Passed** (tsc + Vite) |
 | Browser E2E | `cd apps/web && npm run test:e2e` | **1 passed** (real Chrome, offline transition) |
 | Read benchmark | `make load-test` | **3,912 requests · 195.06 req/s · 0 errors** |
@@ -21,7 +22,8 @@ Backend tests run against a real PostgreSQL database (`parkvanta_test`), not SQL
 unique indexes are exercised with production semantics. API tests also assert request-id generation and safe echo
 (`test_request_context.py`). Deprecation warnings are errors, and `test_query_efficiency.py` pins bounded query counts
 for the invitation page and analytics overview. Security-boundary tests cover trusted proxy headers, Redis rate-limit
-fallback, secret-free validation errors, readiness degradation and cross-tenant slot visibility.
+fallback, secret-free validation errors, readiness degradation and cross-tenant slot visibility. The current backend
+coverage run is **86%** (`3696` statements, `516` missed).
 
 ## 1.1 Recorded load run
 
@@ -82,6 +84,19 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
 - Login writes an audit row.
 - A rejected login body does not echo the submitted password in validation details.
 
+**Production boundaries and lifecycle** (`test_production_boundaries.py`)
+- A society admin cannot provision an account into another society by resolving a foreign apartment id.
+- Parking reservation, occupancy and availability lists reject a caller-supplied foreign property before querying.
+- Gate active-visitor reads reject another property in the same society; a guard cannot widen their property scope.
+- Society admins can create and update towers, apartments, zones, slots, residents, guards, policy and join codes
+  through the real inventory endpoints, including duplicate and case-insensitive slot-code checks.
+- Visitor trends count one confirmed entry per visit instead of counting both authorization and confirmation.
+- Rejecting a pending invitation releases a manually allocated reservation; cancelled and terminal invitations
+  cannot be reallocated.
+- Inactive properties reject new invitations, pending approvals and parking allocation with `property_inactive`.
+- Exits accept lowercase or padded slot codes, and admin release returns the real vehicle registration.
+- Staff can inspect pass status; resident revocation immediately returns the pass and reservation state.
+
 **Security boundaries** (`test_client_ip.py`, `test_rate_limit.py`, `test_health.py`, `test_parking_scope.py`)
 - `X-Forwarded-For` is ignored unless the immediate peer is a configured trusted proxy; spoofed chains are reduced
   to the nearest untrusted hop.
@@ -127,6 +142,8 @@ single-host; it proves the locking and lifecycle paths, not a specific society's
   ledger row.
 - Two threads allocate two vehicles against a single free slot: exactly one reservation exists; the other thread
   receives `no_slot_available`.
+- Concurrent approve and reject calls against one locked invitation produce exactly one terminal state; the loser
+  receives `invalid_state` and no orphaned pass remains.
 - A refresh rotation blocked on an in-flight token row lock does not issue a successor until the lock is released.
 - A reset request blocked on an already-consumed token row cannot reset the password a second time.
 
@@ -149,6 +166,8 @@ These tests use thread barriers, independent SQLAlchemy sessions, and explicit r
 
 **Worker health and metrics** (`test_workers.py`)
 - The expiry sweep deletes archived events past `EVENT_RETENTION_DAYS` and keeps newer frames.
+- An expired active reservation and its active pass transition together, and the reserved bay returns to
+  `AVAILABLE`.
 - A locked pending invitation is skipped by the sweep (`SKIP LOCKED`) rather than being expired underneath an
   in-flight approval.
 - An overstay is flagged once and queues both an in-app note and a pending email.
@@ -214,6 +233,8 @@ To run in CI without Google Chrome, install browsers and set `PLAYWRIGHT_CHANNEL
 - Enum-to-label formatting.
 - `datetime-local` conversion.
 - Offline queue batching splits 100 actions into 50-action reconcile requests without dropping or reordering them.
+- Migrated and IndexedDB queue entries are deduplicated by `client_event_id`, so a legacy action is not replayed
+  twice after migration.
 - Audit CSV cells safely quote commas, quotes and newlines, and neutralize spreadsheet formula prefixes.
 
 The production build type-checks the entire client (`tsc --noEmit`).

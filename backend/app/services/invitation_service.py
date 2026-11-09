@@ -199,6 +199,11 @@ def create_invitation(
     )
     if prop is None:
         raise ValidationError("Resident is not assigned to a property")
+    if not prop.is_active:
+        raise ConflictError(
+            "This property is not accepting visitor invitations.",
+            code="property_inactive",
+        )
 
     arrival = ensure_utc(payload.expected_arrival)
     departure = ensure_utc(payload.expected_departure)
@@ -313,6 +318,13 @@ def approve_invitation(
         raise NotFoundError("Invitation not found")
     _permission_check(db, user, invitation)
 
+    prop = db.get(Property, invitation.property_id)
+    if prop is None or not prop.is_active:
+        raise ConflictError(
+            "This property is not accepting visitor invitations.",
+            code="property_inactive",
+        )
+
     if invitation.status == InvitationStatus.APPROVED.value:
         raise ConflictError(
             "This invitation is already approved. The QR token is only shown once for security reasons.",
@@ -386,9 +398,19 @@ def reject_invitation(
     invitation_id: UUID,
     reason: str | None,
 ) -> Invitation:
-    invitation = get_invitation(db, user, invitation_id)
+    invitation = db.scalar(
+        select(Invitation).where(Invitation.id == invitation_id).with_for_update()
+    )
+    if invitation is None:
+        raise NotFoundError("Invitation not found")
+    _permission_check(db, user, invitation)
     if invitation.status != InvitationStatus.PENDING.value:
         raise ConflictError("Only pending invitations can be rejected", code="invalid_state")
+
+    # A pending invitation can carry a manually allocated reservation. Rejecting
+    # it must release that bay immediately instead of waiting for expiry.
+    qr_service.revoke_pass(db, invitation.id)
+    parking_service.release_reservation(db, invitation_id=invitation.id)
     invitation.status = InvitationStatus.REJECTED.value
     invitation.rejection_reason = reason
     audit_service.record(
@@ -406,6 +428,11 @@ def reject_invitation(
         "invitation.rejected",
         property_id=invitation.property_id,
         data={"invitation_id": str(invitation.id)},
+    )
+    event_service.publish_event(
+        "parking.updated",
+        property_id=invitation.property_id,
+        data={"invitation_id": str(invitation.id), "reason": "invitation_rejected"},
     )
     return invitation
 

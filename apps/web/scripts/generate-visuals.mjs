@@ -284,6 +284,7 @@ const verificationChart = frame({
               ["Double allocation of one slot", "0", "SKIP LOCKED + partial unique index"],
               ["Releases after duplicate offline exit", "1", "idempotency ledger"],
               ["Cross-tenant reads accepted", "0", "403 assertions"],
+              ["Double terminal approve/reject state", "0", "row-lock re-check"],
             ]
               .map(
                 ([label, value, note]) => `

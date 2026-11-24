@@ -79,6 +79,13 @@ def run_preflight(
     )
     _check(
         checks,
+        "allowed_hosts",
+        not production or ("*" not in cfg.allowed_host_list and bool(cfg.allowed_host_list)),
+        f"ALLOWED_HOSTS={cfg.allowed_hosts}",
+        blocking=False,
+    )
+    _check(
+        checks,
         "metrics_token",
         bool(cfg.metrics_token),
         "METRICS_TOKEN is set for /metrics",

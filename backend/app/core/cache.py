@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from contextlib import suppress
 
 from app.core.config import settings
 
@@ -35,7 +36,11 @@ def get_redis_client():
             import redis
 
             client = redis.Redis.from_url(
-                settings.redis_url, decode_responses=True, socket_timeout=0.5
+                settings.redis_url,
+                decode_responses=True,
+                socket_timeout=0.5,
+                socket_connect_timeout=0.5,
+                health_check_interval=30,
             )
             client.ping()
             _client = client
@@ -49,5 +54,21 @@ def reset_redis_client() -> None:
     """Discard a failed client and retry after a short cooldown."""
     global _client, _next_attempt_at
     with _lock:
+        client = _client
         _client = None
         _next_attempt_at = time.monotonic() + RETRY_SECONDS
+    if client is not None:
+        with suppress(Exception):
+            client.close()
+
+
+def close_redis_client() -> None:
+    """Close the cached Redis client during application shutdown."""
+    global _client, _next_attempt_at
+    with _lock:
+        client = _client
+        _client = None
+        _next_attempt_at = 0.0
+    if client is not None:
+        with suppress(Exception):
+            client.close()

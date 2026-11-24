@@ -39,7 +39,7 @@ export function useEventStream(
   useEffect(() => {
     cursor.current = null;
     setConnected(false);
-    if (!propertyId) return;
+    if (!propertyId || !API_BASE_URL) return;
     let source: EventSource | null = null;
     let reconnect: number | undefined;
     let closed = false;

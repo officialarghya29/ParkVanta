@@ -1,11 +1,12 @@
 from typing import Annotated
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import CurrentUser, client_ip, require_roles
-from app.core.errors import AuthError
+from app.core.errors import AuthError, ForbiddenError
 from app.core.rate_limit import SlidingWindowRateLimiter
 from app.database.session import get_db
 from app.models import User
@@ -32,16 +33,52 @@ COOKIE_NAME = "parkvanta_refresh"
 COOKIE_PATH = "/api/v1/auth"
 
 
+def _cookie_attrs() -> dict:
+    return {
+        "httponly": True,
+        "secure": settings.is_production or settings.refresh_cookie_samesite == "none",
+        "samesite": settings.refresh_cookie_samesite,
+        "path": COOKIE_PATH,
+    }
+
+
 def _set_refresh_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
-        httponly=True,
-        secure=settings.is_production,
-        samesite="lax",
         max_age=settings.refresh_token_days * 24 * 3600,
-        path=COOKIE_PATH,
+        **_cookie_attrs(),
     )
+
+
+def _request_origin(request: Request) -> str | None:
+    origin = request.headers.get("origin")
+    if origin:
+        return origin.strip().rstrip("/")
+    referer = request.headers.get("referer")
+    if referer:
+        parsed = urlparse(referer)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    return None
+
+
+def _assert_cookie_csrf(request: Request) -> None:
+    """Protect cookie-authenticated state-changing auth routes from CSRF."""
+    origin = _request_origin(request)
+    allowed = settings.cors_origin_list
+    if origin is not None and allowed != ["*"] and origin not in allowed:
+        raise ForbiddenError("Cross-origin cookie request rejected")
+
+    if settings.refresh_cookie_samesite == "none":
+        if origin is None or (allowed != ["*"] and origin not in allowed):
+            raise ForbiddenError("Cross-site cookie requests require a trusted Origin header")
+        content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+        requested_with = request.headers.get("x-requested-with", "").strip()
+        if content_type != "application/json" or not requested_with:
+            raise ForbiddenError(
+                "Cross-site cookie requests require application/json and X-Requested-With"
+            )
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -76,7 +113,10 @@ def refresh_tokens(
     response: Response,
     db: Annotated[Session, Depends(get_db)],
 ) -> TokenResponse:
-    raw = payload.refresh_token or request.cookies.get(COOKIE_NAME)
+    cookie_token = request.cookies.get(COOKIE_NAME)
+    if not payload.refresh_token and cookie_token:
+        _assert_cookie_csrf(request)
+    raw = payload.refresh_token or cookie_token
     if not raw:
         raise AuthError("No refresh token supplied")
     refresh_limiter.hit(SlidingWindowRateLimiter.key_for("refresh", client_ip(request)))
@@ -92,10 +132,13 @@ def refresh_tokens(
 
 @router.post("/logout", response_model=Message)
 def logout(payload: RefreshRequest, request: Request, response: Response, db: Annotated[Session, Depends(get_db)]) -> Message:
-    raw = payload.refresh_token or request.cookies.get(COOKIE_NAME)
+    cookie_token = request.cookies.get(COOKIE_NAME)
+    if not payload.refresh_token and cookie_token:
+        _assert_cookie_csrf(request)
+    raw = payload.refresh_token or cookie_token
     if raw:
         auth_service.revoke_refresh_token(db, raw)
-    response.delete_cookie(COOKIE_NAME, path=COOKIE_PATH)
+    response.delete_cookie(COOKIE_NAME, **_cookie_attrs())
     return Message(message="Signed out")
 
 

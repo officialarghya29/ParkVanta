@@ -15,13 +15,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections import defaultdict
+from contextlib import suppress
 from typing import Any, AsyncIterator
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 
-from app.core.cache import get_redis_client
+from app.core.cache import get_redis_client, reset_redis_client
 from app.core.config import settings
 from app.core.time import utcnow
 from app.database.session import SessionLocal
@@ -30,11 +32,12 @@ from app.models import RealtimeEvent
 logger = logging.getLogger("parkvanta.events")
 
 STREAM_MAXLEN = 500
+ASYNC_RETRY_SECONDS = 30.0
 
 _local_subscribers: dict[str, set[asyncio.Queue[str]]] = defaultdict(set)
 _loop: asyncio.AbstractEventLoop | None = None
 _async_client: Any = None
-_async_checked = False
+_async_next_attempt_at = 0.0
 _async_loop: Any = None
 
 
@@ -98,6 +101,7 @@ def publish_event(event_type: str, *, property_id: UUID, data: dict | None = Non
             return str(sequence) if sequence is not None else None
         except Exception as exc:  # pragma: no cover - depends on environment
             logger.warning("Redis publish failed, using local broker: %s", exc)
+            reset_redis_client()
 
     _deliver_local(str(property_id), payload)
     return str(sequence) if sequence is not None else None
@@ -174,27 +178,54 @@ def _parse_last_sequence(last_event_id: str | None) -> int | None:
 
 
 async def _get_async_client() -> Any:
-    global _async_client, _async_checked, _async_loop
+    global _async_client, _async_next_attempt_at, _async_loop
     loop = asyncio.get_running_loop()
-    if _async_checked and _async_loop is not loop:
+    if _async_loop is not None and _async_loop is not loop:
         _async_client = None
-        _async_checked = False
-    if _async_checked:
+        _async_next_attempt_at = 0.0
+    if _async_client is not None:
         return _async_client
-    _async_checked = True
+    if time.monotonic() < _async_next_attempt_at:
+        return None
     _async_loop = loop
     try:
         import redis.asyncio as redis_async
 
         client = redis_async.Redis.from_url(
-            settings.redis_url, decode_responses=True, socket_timeout=20
+            settings.redis_url,
+            decode_responses=True,
+            socket_timeout=20,
+            socket_connect_timeout=1.0,
+            health_check_interval=30,
         )
         await client.ping()
         _async_client = client
     except Exception as exc:  # pragma: no cover - depends on environment
         logger.warning("Redis stream unavailable, using local broker: %s", exc)
         _async_client = None
+        _async_next_attempt_at = time.monotonic() + ASYNC_RETRY_SECONDS
     return _async_client
+
+
+async def _reset_async_client() -> None:
+    global _async_client, _async_next_attempt_at
+    client = _async_client
+    _async_client = None
+    _async_next_attempt_at = time.monotonic() + ASYNC_RETRY_SECONDS
+    if client is not None:
+        with suppress(Exception):
+            await client.aclose()
+
+
+async def close_async_client() -> None:
+    global _async_client, _async_next_attempt_at, _async_loop
+    client = _async_client
+    _async_client = None
+    _async_next_attempt_at = 0.0
+    _async_loop = None
+    if client is not None:
+        with suppress(Exception):
+            await client.aclose()
 
 
 async def event_stream(
@@ -242,6 +273,7 @@ async def event_stream(
             raise
         except Exception as exc:  # pragma: no cover - environment dependent
             logger.warning("Redis stream read failed, degrading to local broker: %s", exc)
+            await _reset_async_client()
         async for frame in _local_stream(property_id):
             yield frame
         return

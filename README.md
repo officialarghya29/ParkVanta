@@ -610,6 +610,6 @@ software without prior written permission. Access to this repository does not tr
 © 2026 ParkVanta Team. All rights reserved.
 
 Engineered by **Arghya Bose**
-CoEngineered by **Trayam Roy**
+Edited by **Trayam Roy**
 
 </div>

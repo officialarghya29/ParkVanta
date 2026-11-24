@@ -22,7 +22,7 @@ from app.core.security import (
     sha256_hex,
     verify_password,
 )
-from app.core.time import utcnow
+from app.core.time import ensure_utc, utcnow
 from app.models import (
     Apartment,
     GuardProfile,
@@ -156,7 +156,7 @@ def rotate_refresh_token(db: Session, raw_token: str) -> tuple[User, str, str]:
         db.commit()
         raise AuthError("Refresh token has already been used. Sign in again.")
 
-    if token.expires_at <= utcnow():
+    if ensure_utc(token.expires_at) <= utcnow():
         token.revoked_at = utcnow()
         db.commit()
         raise AuthError("Refresh token has expired")
@@ -310,7 +310,7 @@ def request_password_reset(db: Session, email: str) -> None:
         # Development affordance only, and only when no transport exists.
         logger.warning("Password reset token for %s (dev only): %s", user.email, raw_token)
     except mail_service.MailDeliveryError as exc:
-        logger.exception("Password reset email delivery failed for %s", user.email)
+        logger.exception("Password reset email delivery failed for user %s", user.id)
         raise ServiceUnavailableError(
             "Password reset email could not be delivered. Try again later."
         ) from exc
@@ -322,7 +322,7 @@ def reset_password(db: Session, raw_token: str, new_password: str) -> None:
         .where(PasswordResetToken.token_hash == sha256_hex(raw_token))
         .with_for_update()
     )
-    if token is None or token.used_at is not None or token.expires_at <= utcnow():
+    if token is None or token.used_at is not None or ensure_utc(token.expires_at) <= utcnow():
         raise ValidationError("Reset token is invalid or has expired")
 
     user = db.scalar(select(User).where(User.id == token.user_id).with_for_update())

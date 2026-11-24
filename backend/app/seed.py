@@ -10,6 +10,7 @@ import os
 
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.database.session import session_scope
 from app.models import (
@@ -30,6 +31,8 @@ DEMO_PASSWORD = os.getenv("SEED_PASSWORD", "ParkVanta@2026")
 
 
 def main() -> None:
+    if settings.is_production:
+        raise RuntimeError("Refusing to run demo seed in a production environment")
     with session_scope() as db:
         existing = db.scalar(select(Organization).where(Organization.slug == "skyline"))
         if existing is not None:

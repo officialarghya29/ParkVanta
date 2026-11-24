@@ -11,8 +11,10 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.v1.router import api_router
+from app.core import cache
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging
@@ -24,12 +26,30 @@ configure_logging("DEBUG" if settings.debug else "INFO")
 logger = logging.getLogger("parkvanta")
 
 
+class _HealthBypassTrustedHostMiddleware:
+    """Enforce TrustedHostMiddleware on API routes while keeping /health and /ready reachable."""
+
+    def __init__(self, app: ASGIApp, allowed_hosts: list[str]) -> None:
+        self.app = app
+        self.trusted_host = TrustedHostMiddleware(app, allowed_hosts=allowed_hosts)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope.get("path") in {"/health", "/ready"}:
+            await self.app(scope, receive, send)
+            return
+        await self.trusted_host(scope, receive, send)
+
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     settings.validate_for_production()
     event_service.set_event_loop(asyncio.get_running_loop())
     logger.info("ParkVanta API starting in %s mode", settings.environment)
-    yield
+    try:
+        yield
+    finally:
+        await event_service.close_async_client()
+        cache.close_redis_client()
 
 
 app = FastAPI(
@@ -40,9 +60,9 @@ app = FastAPI(
         "Visitor verification, single-use QR passes, concurrency-safe parking allocation, "
         "gate operations and operational analytics. All state is tenant-scoped."
     ),
-    openapi_url=f"{settings.api_v1_prefix}/openapi.json",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    openapi_url=f"{settings.api_v1_prefix}/openapi.json" if settings.api_docs_enabled else None,
+    docs_url="/docs" if settings.api_docs_enabled else None,
+    redoc_url="/redoc" if settings.api_docs_enabled else None,
     lifespan=_lifespan,
 )
 
@@ -51,12 +71,12 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER],
+    allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER, "X-Requested-With"],
     expose_headers=[REQUEST_ID_HEADER],
 )
 
 if settings.allowed_host_list != ["*"]:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
+    app.add_middleware(_HealthBypassTrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
 
 
 @app.middleware("http")
@@ -154,6 +174,8 @@ def metrics(request: Request) -> PlainTextResponse:
         expected = f"Bearer {settings.metrics_token}"
         if not secrets.compare_digest(request.headers.get("authorization", ""), expected):
             return PlainTextResponse("unauthorized\n", status_code=401)
+    elif settings.is_production:
+        return PlainTextResponse("metrics disabled without METRICS_TOKEN\n", status_code=403)
     with SessionLocal() as db:
         body = metrics_service.render_metrics(db)
     return PlainTextResponse(

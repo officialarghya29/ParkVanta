@@ -213,7 +213,30 @@ export function GuardPage() {
         method: "POST",
         json: { invitation_id: invitationId },
       }),
-    onSuccess: (response) => {
+    onSuccess: (response, invitationId) => {
+      if (response.slot_code) {
+        const enteredVisitor: ActiveVisitor = {
+          invitation_id: invitationId,
+          visitor_name: verdict?.visitor_name ?? authorization?.visitor_name ?? "Visitor",
+          vehicle_registration: verdict?.vehicle_registration ?? null,
+          slot_code: response.slot_code,
+          zone_name: verdict?.parking_zone ?? null,
+          entered_at: response.entered_at ?? new Date().toISOString(),
+          expected_departure: verdict?.pass_expires_at ?? new Date().toISOString(),
+          overstay: false,
+        };
+        queryClient.setQueryData<ActiveVisitor[]>(["gate", "active"], (previous) => {
+          const current = previous ?? [];
+          if (current.some((item) => item.invitation_id === invitationId)) return current;
+          return [enteredVisitor, ...current];
+        });
+        setCachedActive((previous) => {
+          if (previous.some((item) => item.invitation_id === invitationId)) return previous;
+          const next = [enteredVisitor, ...previous];
+          void cacheActiveVisitors(next);
+          return next;
+        });
+      }
       setEntryResult(response);
       void queryClient.invalidateQueries({ queryKey: ["gate"] });
     },

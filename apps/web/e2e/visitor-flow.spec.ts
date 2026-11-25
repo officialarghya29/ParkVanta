@@ -52,6 +52,7 @@ test("resident issues a pass; guard authorizes entry, confirms and releases the 
   await guard.getByTestId("guard-confirm-entry").click();
   await expect(guard.getByText(/is now OCCUPIED/)).toBeVisible();
   await expect(guard.getByText(guest).first()).toBeVisible();
+  await expect(guard.getByTestId("guard-exit").first()).toBeVisible();
 
   // Network loss: entry verification locks, but the exit is queued locally.
   await guardContext.setOffline(true);

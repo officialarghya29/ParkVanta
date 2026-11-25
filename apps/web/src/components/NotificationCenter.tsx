@@ -5,142 +5,126 @@ import { api } from "../lib/api";
 import { cn } from "../lib/cn";
 import type { NotificationItem, Page, UnreadCount } from "../lib/types";
 
-const formatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
 export function NotificationCenter() {
   const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const unread = useQuery({
     queryKey: ["notifications", "unread"],
     queryFn: () => api<UnreadCount>("/notifications/unread-count"),
-    refetchInterval: 30_000,
+    refetchInterval: 20_000,
   });
 
   const list = useQuery({
     queryKey: ["notifications", "list"],
     queryFn: () => api<Page<NotificationItem>>("/notifications?limit=12"),
     enabled: open,
-    refetchInterval: open ? 30_000 : false,
-  });
-
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["notifications"] });
-  };
-
-  const markRead = useMutation({
-    mutationFn: (id: string) =>
-      api<NotificationItem>(`/notifications/${id}/read`, { method: "POST" }),
-    onSuccess: invalidate,
-  });
-
-  const markAll = useMutation({
-    mutationFn: () => api("/notifications/read-all", { method: "POST" }),
-    onSuccess: invalidate,
   });
 
   useEffect(() => {
     if (!open) return;
-    const handleMouse = (event: MouseEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", handleMouse);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleMouse);
-      document.removeEventListener("keydown", handleKey);
-    };
+    function onDown(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
   }, [open]);
 
+  const markRead = useMutation({
+    mutationFn: (id: string) =>
+      api<NotificationItem>(`/notifications/${id}/read`, { method: "POST" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: () => api("/notifications/read-all", { method: "POST" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+
   const count = unread.data?.count ?? 0;
-  const items = list.data?.items ?? [];
 
   return (
-    <div ref={root} className="relative">
+    <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        className={cn(
-          "relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-ink-muted transition-colors hover:border-border-strong hover:bg-surface-subtle hover:text-ink",
-          open && "border-accent/40 bg-accent-soft text-accent",
-        )}
-        aria-label={count ? `Notifications, ${count} unread` : "Notifications"}
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Notifications"
         aria-expanded={open}
+        className={cn(
+          "relative inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
+          open
+            ? "border-accent-border bg-accent-soft text-accent"
+            : "border-line bg-surface text-ink-muted hover:bg-surface-subtle hover:text-ink",
+        )}
       >
-        <Bell className="h-4 w-4" />
+        <Bell className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Inbox</span>
         {count > 0 ? (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-mono text-[10px] font-semibold text-white">
-            {count > 9 ? "9+" : count}
+          <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white tabular">
+            {count > 99 ? "99+" : count}
           </span>
         ) : null}
       </button>
 
       {open ? (
         <div
-          className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-white shadow-lg"
-          role="region"
-          aria-label="Notification inbox"
+          role="dialog"
+          aria-label="Notifications"
+          className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-line bg-surface shadow-lg sm:w-96"
         >
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-ink">Notifications</p>
-              <p className="text-[11px] text-ink-subtle">{count} unread</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => markAll.mutate()}
-              disabled={count === 0 || markAll.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink disabled:opacity-40"
-            >
-              <CheckCheck className="h-3.5 w-3.5" /> Mark all read
-            </button>
+          <div className="flex items-center justify-between border-b border-line bg-surface-subtle px-4 py-2.5">
+            <span className="text-xs font-semibold text-ink">Activity notifications</span>
+            {count > 0 ? (
+              <button
+                type="button"
+                onClick={() => markAllRead.mutate()}
+                disabled={markAllRead.isPending}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                Mark all read
+              </button>
+            ) : null}
           </div>
 
-          <div className="max-h-96 overflow-y-auto">
+          <div className="max-h-96 divide-y divide-line overflow-y-auto">
             {list.isLoading ? (
-              <p className="px-4 py-8 text-center text-xs text-ink-subtle">Loading notifications…</p>
-            ) : null}
-            {!list.isLoading && items.length === 0 ? (
+              <p className="px-4 py-8 text-center text-xs text-ink-subtle">Loading inbox…</p>
+            ) : !list.data?.items.length ? (
               <p className="px-4 py-8 text-center text-xs text-ink-subtle">No notifications yet.</p>
-            ) : null}
-            {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (!item.read_at) markRead.mutate(item.id);
-                }}
-                className={cn(
-                  "block w-full border-b border-border px-4 py-3 text-left transition-colors last:border-0 hover:bg-surface-subtle",
-                  !item.read_at && "bg-accent-soft/50",
-                )}
-              >
-                <span className="flex items-start gap-2.5">
+            ) : (
+              list.data.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    if (!item.read_at) markRead.mutate(item.id);
+                  }}
+                  className={cn(
+                    "flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-surface-subtle",
+                    !item.read_at && "bg-accent-soft/45",
+                  )}
+                >
                   <span
                     className={cn(
-                      "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-                      item.read_at ? "bg-zinc-300" : "bg-accent",
+                      "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                      item.read_at ? "bg-transparent" : "bg-accent",
                     )}
                   />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-ink">{item.title}</span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">
-                      {item.body}
-                    </span>
-                    <span className="mt-1 block font-mono text-[10px] text-ink-subtle">
-                      {formatter.format(new Date(item.created_at))}
-                    </span>
-                  </span>
-                </span>
-              </button>
-            ))}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-ink">{item.title}</p>
+                    <p className="mt-0.5 text-xs text-ink-muted">{item.body}</p>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </div>
       ) : null}

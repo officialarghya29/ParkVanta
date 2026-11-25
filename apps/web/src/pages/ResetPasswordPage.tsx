@@ -1,14 +1,14 @@
-import { ArrowRight, CheckCircle2, KeyRound } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Lock } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Brand } from "../components/AppShell";
-import { Button, Card, ErrorNote, Field, Input } from "../components/ui";
+import { Button, ErrorNote, Field, Input } from "../components/ui";
 import { api } from "../lib/api";
 
 export function ResetPasswordPage() {
   const [params] = useSearchParams();
-  const token = params.get("token") ?? "";
+  const [token, setToken] = useState(params.get("token") ?? "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [done, setDone] = useState(false);
@@ -30,80 +30,88 @@ export function ResetPasswordPage() {
       });
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not reset the password");
+      setError(err instanceof Error ? err.message : "Could not reset password");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
-      <div className="w-full max-w-md">
-        <div className="mb-6">
+    <div className="flex min-h-screen flex-col bg-canvas">
+      <header className="border-b border-line bg-surface">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
           <Brand />
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-ink"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to sign in
+          </Link>
         </div>
-        <Card className="p-7">
+      </header>
+
+      <main className="mx-auto flex w-full max-w-md flex-1 items-center px-4 py-12">
+        <div className="w-full rounded-2xl border border-line bg-surface p-6 sm:p-8">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+            Security Update
+          </p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-ink">
+            Choose a new password
+          </h1>
+
           {done ? (
-            <div className="text-center">
-              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+            <div className="mt-5 space-y-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ok-soft text-ok">
                 <CheckCircle2 className="h-5 w-5" />
               </div>
-              <h1 className="mt-4 text-xl font-semibold text-ink">Password updated</h1>
-              <p className="mt-2 text-sm text-ink-muted">
-                All existing sessions were revoked. Sign in with your new password.
+              <p className="text-sm text-ink-muted">
+                Your password has been updated. Sign in with your new credentials.
               </p>
-              <Link to="/login" className="mt-6 inline-flex w-full">
-                <Button className="w-full">
-                  Sign in <ArrowRight className="h-4 w-4" />
-                </Button>
+              <Link
+                to="/login"
+                className="inline-flex h-9 items-center rounded-full bg-accent px-5 text-sm font-medium text-white hover:bg-accent-hover"
+              >
+                Continue to sign in
               </Link>
             </div>
           ) : (
-            <>
-              <p className="text-xs font-semibold tracking-wider text-accent uppercase">Account recovery</p>
-              <h1 className="mt-1 text-xl font-semibold tracking-tight text-ink">Choose a new password</h1>
-              {!token ? (
-                <div className="mt-4">
-                  <ErrorNote message="This link is missing its reset token. Request a new link." />
-                </div>
-              ) : (
-                <form className="mt-5 space-y-4" onSubmit={submit}>
-                  <Field label="New password" hint="letters and digits" required>
-                    <Input
-                      required
-                      type="password"
-                      minLength={8}
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      autoComplete="new-password"
-                    />
-                  </Field>
-                  <Field label="Confirm password" required>
-                    <Input
-                      required
-                      type="password"
-                      minLength={8}
-                      value={confirm}
-                      onChange={(event) => setConfirm(event.target.value)}
-                      autoComplete="new-password"
-                    />
-                  </Field>
-                  {error ? <ErrorNote message={error} /> : null}
-                  <Button type="submit" className="w-full" disabled={busy}>
-                    <KeyRound className="h-4 w-4" />
-                    {busy ? "Updating…" : "Update password"}
-                  </Button>
-                </form>
-              )}
-            </>
+            <form onSubmit={submit} className="mt-5 space-y-4">
+              <Field label="Reset token">
+                <Input
+                  required
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                  className="font-mono text-xs"
+                />
+              </Field>
+              <Field label="New password" hint="Minimum 10 characters">
+                <Input
+                  type="password"
+                  required
+                  minLength={10}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </Field>
+              <Field label="Confirm password">
+                <Input
+                  type="password"
+                  required
+                  minLength={10}
+                  value={confirm}
+                  onChange={(event) => setConfirm(event.target.value)}
+                />
+              </Field>
+              {error ? <ErrorNote message={error} /> : null}
+              <Button type="submit" className="w-full" disabled={busy}>
+                <Lock className="h-4 w-4" />
+                {busy ? "Updating…" : "Update password"}
+              </Button>
+            </form>
           )}
-          <div className="mt-6 border-t border-border pt-4 text-xs">
-            <Link to="/forgot-password" className="font-medium text-ink-muted hover:text-ink">
-              Request a new reset link
-            </Link>
-          </div>
-        </Card>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

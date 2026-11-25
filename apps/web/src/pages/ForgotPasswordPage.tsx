@@ -1,9 +1,9 @@
-import { ArrowLeft, ArrowRight, MailCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Mail } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Brand } from "../components/AppShell";
-import { Button, Card, ErrorNote, Field, Input } from "../components/ui";
+import { Button, ErrorNote, Field, Input } from "../components/ui";
 import { api } from "../lib/api";
 
 export function ForgotPasswordPage() {
@@ -20,62 +20,73 @@ export function ForgotPasswordPage() {
       await api("/auth/forgot-password", { method: "POST", json: { email } });
       setSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not request a reset link");
+      setError(err instanceof Error ? err.message : "Request failed");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
-      <div className="w-full max-w-md">
-        <div className="mb-6">
+    <div className="flex min-h-screen flex-col bg-canvas">
+      <header className="border-b border-line bg-surface">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
           <Brand />
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-muted hover:text-ink"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to sign in
+          </Link>
         </div>
-        <Card className="p-7">
+      </header>
+
+      <main className="mx-auto flex w-full max-w-md flex-1 items-center px-4 py-12">
+        <div className="w-full rounded-2xl border border-line bg-surface p-6 sm:p-8">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+            Account Recovery
+          </p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-ink">Reset your password</h1>
+
           {sent ? (
-            <div className="text-center">
-              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
-                <MailCheck className="h-5 w-5" />
+            <div className="mt-5 space-y-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ok-soft text-ok">
+                <CheckCircle2 className="h-5 w-5" />
               </div>
-              <h1 className="mt-4 text-xl font-semibold text-ink">Check your inbox</h1>
-              <p className="mt-2 text-sm text-ink-muted">
-                If an account exists for <span className="font-medium text-ink">{email}</span>, a
-                single-use reset link is on its way. It expires in 30 minutes.
+              <p className="text-sm leading-relaxed text-ink-muted">
+                If an active account exists for <strong className="text-ink">{email}</strong>, a
+                single-use reset link has been dispatched.
               </p>
+              <Link
+                to="/login"
+                className="inline-flex h-9 items-center rounded-full border border-line-strong px-4 text-xs font-medium text-ink hover:bg-surface-subtle"
+              >
+                Return to sign in
+              </Link>
             </div>
           ) : (
-            <>
-              <p className="text-xs font-semibold tracking-wider text-accent uppercase">Account recovery</p>
-              <h1 className="mt-1 text-xl font-semibold tracking-tight text-ink">Reset your password</h1>
-              <p className="mt-1 text-sm text-ink-muted">
-                We will email a single-use reset link to the address on your account.
+            <form onSubmit={submit} className="mt-4 space-y-4">
+              <p className="text-sm text-ink-muted">
+                Enter your registered email address and we will issue a password reset token.
               </p>
-              <form className="mt-5 space-y-4" onSubmit={submit}>
-                <Field label="Email address" required>
-                  <Input
-                    required
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    autoComplete="email"
-                  />
-                </Field>
-                {error ? <ErrorNote message={error} /> : null}
-                <Button type="submit" className="w-full" disabled={busy}>
-                  {busy ? "Requesting…" : "Email reset link"}
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </form>
-            </>
+              <Field label="Email address">
+                <Input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="name@community.org"
+                />
+              </Field>
+              {error ? <ErrorNote message={error} /> : null}
+              <Button type="submit" className="w-full" disabled={busy}>
+                <Mail className="h-4 w-4" />
+                {busy ? "Sending link…" : "Send reset link"}
+              </Button>
+            </form>
           )}
-          <div className="mt-6 border-t border-border pt-4 text-xs">
-            <Link to="/login" className="inline-flex items-center gap-1 font-medium text-ink-muted hover:text-ink">
-              <ArrowLeft className="h-3.5 w-3.5" /> Back to sign in
-            </Link>
-          </div>
-        </Card>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

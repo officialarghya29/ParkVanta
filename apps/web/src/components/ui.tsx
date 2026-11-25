@@ -10,172 +10,227 @@ import type {
 } from "react";
 import { cn } from "../lib/cn";
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
-type ButtonSize = "sm" | "md";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "subtle";
+type ButtonSize = "sm" | "md" | "lg";
 
 export function Button({
   variant = "primary",
   size = "md",
   className,
+  children,
   type = "button",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
 }) {
-  const variants: Record<ButtonVariant, string> = {
-    primary:
-      "bg-accent text-white hover:bg-accent-hover shadow-[0_1px_2px_rgba(16,24,40,0.08)] disabled:bg-accent/50",
-    secondary:
-      "border border-border-strong bg-white text-ink hover:bg-surface-subtle shadow-[0_1px_2px_rgba(16,24,40,0.04)]",
-    ghost: "text-ink-muted hover:bg-surface-subtle hover:text-ink",
-    danger:
-      "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100/80 hover:border-red-300",
-  };
-  const sizes: Record<ButtonSize, string> = {
-    sm: "h-8 rounded-md px-2.5 text-xs gap-1.5",
-    md: "h-9 rounded-lg px-3.5 text-sm gap-2",
-  };
   return (
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-55",
-        sizes[size],
-        variants[variant],
+        "inline-flex items-center justify-center gap-2 font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:pointer-events-none disabled:opacity-45 whitespace-nowrap",
+        size === "sm" && "h-8 px-3.5 text-xs",
+        size === "md" && "h-9 px-4 text-sm",
+        size === "lg" && "h-10 px-5 text-sm",
+        variant === "primary" &&
+          "rounded-full bg-accent text-white hover:bg-accent-hover shadow-xs",
+        variant === "secondary" &&
+          "rounded-full border border-line-strong bg-surface text-ink hover:bg-surface-subtle",
+        variant === "subtle" &&
+          "rounded-lg border border-line bg-surface-subtle text-ink hover:bg-surface-muted",
+        variant === "ghost" &&
+          "rounded-lg text-ink-muted hover:bg-surface-subtle hover:text-ink",
+        variant === "danger" &&
+          "rounded-full border border-bad-border bg-bad-soft text-bad hover:bg-bad hover:text-white hover:border-bad",
         className,
       )}
       {...props}
-    />
+    >
+      {children}
+    </button>
   );
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div
+    <section
       className={cn(
-        "rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(16,24,40,0.04)]",
+        "rounded-xl border border-line bg-surface",
         className,
       )}
     >
       {children}
+    </section>
+  );
+}
+
+export function StudioPane({
+  className,
+  children,
+  ...rest
+}: { className?: string; children: ReactNode } & React.HTMLAttributes<HTMLElement>) {
+  return (
+    <section
+      className={cn(
+        "overflow-hidden rounded-xl border border-line bg-surface",
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </section>
+  );
+}
+
+export function StudioPaneHeader({
+  title,
+  subtitle,
+  action,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface px-5 py-3.5",
+        className,
+      )}
+    >
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold tracking-tight text-ink">{title}</h2>
+        {subtitle ? <p className="mt-0.5 text-xs text-ink-subtle">{subtitle}</p> : null}
+      </div>
+      {action ? <div className="flex flex-wrap items-center gap-2">{action}</div> : null}
     </div>
   );
 }
 
-type BadgeTone = "teal" | "amber" | "red" | "slate" | "blue";
+export type BadgeTone = "neutral" | "ok" | "warn" | "bad" | "accent";
 
 export function Badge({
-  children,
-  tone = "slate",
+  tone = "neutral",
   className,
+  children,
   dot = false,
 }: {
-  children: ReactNode;
   tone?: BadgeTone;
   className?: string;
+  children: ReactNode;
   dot?: boolean;
 }) {
-  const tones: Record<BadgeTone, string> = {
-    teal: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    amber: "border-amber-200 bg-amber-50 text-amber-800",
-    red: "border-red-200 bg-red-50 text-red-800",
-    slate: "border-border bg-surface-subtle text-ink-muted",
-    blue: "border-sky-200 bg-sky-50 text-sky-800",
-  };
-  const dotColors: Record<BadgeTone, string> = {
-    teal: "bg-emerald-600",
-    amber: "bg-amber-500",
-    red: "bg-red-600",
-    slate: "bg-zinc-400",
-    blue: "bg-sky-600",
-  };
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium tracking-wide",
-        tones[tone],
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium leading-4 tracking-tight whitespace-nowrap",
+        tone === "neutral" && "border-line bg-surface-subtle text-ink-muted",
+        tone === "ok" && "border-ok-border bg-ok-soft text-ok",
+        tone === "warn" && "border-warn-border bg-warn-soft text-warn",
+        tone === "bad" && "border-bad-border bg-bad-soft text-bad",
+        tone === "accent" && "border-accent-border bg-accent-soft text-accent",
         className,
       )}
     >
-      {dot ? <span className={cn("h-1.5 w-1.5 rounded-full", dotColors[tone])} /> : null}
+      {dot ? (
+        <span
+          className={cn(
+            "h-1.5 w-1.5 rounded-full",
+            tone === "neutral" && "bg-ink-subtle",
+            tone === "ok" && "bg-ok",
+            tone === "warn" && "bg-warn",
+            tone === "bad" && "bg-bad",
+            tone === "accent" && "bg-accent",
+          )}
+        />
+      ) : null}
       {children}
     </span>
   );
 }
 
 export function statusTone(status: string): BadgeTone {
-  switch (status) {
-    case "APPROVED":
-    case "ACTIVE":
-    case "SENT":
-    case "AVAILABLE":
-      return "teal";
-    case "PENDING":
-    case "RESERVED":
-      return "amber";
-    case "REJECTED":
-    case "CANCELLED":
-    case "EXPIRED":
-    case "DENIED":
-    case "REVOKED":
-    case "BLOCKED":
-      return "red";
-    case "COMPLETED":
-    case "RELEASED":
-    case "CONSUMED":
-    case "OCCUPIED":
-      return "blue";
-    default:
-      return "slate";
+  const s = status.toUpperCase();
+  if (
+    [
+      "VALID",
+      "APPROVED",
+      "ACTIVE",
+      "AVAILABLE",
+      "COMPLETED",
+      "VERIFIED",
+      "OCCUPIED",
+      "CONFIRMED",
+    ].includes(s)
+  ) {
+    return "ok";
   }
+  if (["PENDING", "RESERVED", "ENTRY_AUTHORIZED", "HOLD", "USED"].includes(s)) {
+    return "warn";
+  }
+  if (["REJECTED", "REVOKED", "EXPIRED", "CANCELLED", "DENIED", "BLOCKED", "OVERSTAY"].includes(s)) {
+    return "bad";
+  }
+  return "neutral";
 }
 
 export function Field({
   label,
   hint,
   error,
-  required,
-  htmlFor,
   children,
+  htmlFor,
 }: {
   label: string;
   hint?: string;
   error?: string;
-  required?: boolean;
-  htmlFor?: string;
   children: ReactNode;
+  htmlFor?: string;
 }) {
   const generatedId = useId();
-  const fieldId = htmlFor ?? generatedId;
+  const fieldId =
+    htmlFor ??
+    (isValidElement<{ id?: string }>(children) && children.props.id
+      ? children.props.id
+      : generatedId);
   const errorId = `${fieldId}-error`;
-
-  let control = children;
-  if (isValidElement(children)) {
-    const childProps = children.props as Record<string, unknown>;
-    const nextProps: Record<string, unknown> = {};
-    if (!childProps.id) nextProps.id = fieldId;
-    if (error) {
-      nextProps["aria-invalid"] = true;
-      nextProps["aria-describedby"] = errorId;
-    }
-    if (Object.keys(nextProps).length > 0) {
-      control = cloneElement(children as ReactElement<Record<string, unknown>>, nextProps);
-    }
-  }
+  const hintId = `${fieldId}-hint`;
+  const control = isValidElement<{
+    id?: string;
+    "aria-invalid"?: boolean;
+    "aria-describedby"?: string;
+  }>(children)
+    ? cloneElement(
+        children as ReactElement<{
+          id?: string;
+          "aria-invalid"?: boolean;
+          "aria-describedby"?: string;
+        }>,
+        {
+          id: fieldId,
+          "aria-invalid": error ? true : undefined,
+          "aria-describedby": error ? errorId : hint ? hintId : undefined,
+        },
+      )
+    : children;
 
   return (
-    <div className="space-y-1.5">
+    <div className="block space-y-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <label htmlFor={fieldId} className="text-xs font-medium text-ink">
           {label}
-          {required ? <span className="ml-0.5 text-red-600" aria-hidden="true">*</span> : null}
         </label>
-        {hint ? <span className="text-[11px] text-ink-subtle">{hint}</span> : null}
+        {hint ? (
+          <span id={hintId} className="text-[11px] text-ink-subtle">
+            {hint}
+          </span>
+        ) : null}
       </div>
       {control}
       {error ? (
-        <p id={errorId} className="text-xs text-red-600" role="alert">
+        <p id={errorId} className="text-xs font-medium text-bad">
           {error}
         </p>
       ) : null}
@@ -183,21 +238,24 @@ export function Field({
   );
 }
 
-const controlClasses =
-  "w-full rounded-lg border border-border-strong bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-subtle/75 transition-colors hover:border-zinc-400 focus:border-accent focus:outline-none disabled:bg-surface-subtle disabled:text-ink-subtle";
+const inputBase =
+  "w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-subtle/75 transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15 disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:text-ink-subtle";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn(controlClasses, "h-9", className)} {...props} />;
+  return <input className={cn(inputBase, "h-9", className)} {...props} />;
 }
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div className="relative">
-      <select className={cn(controlClasses, "h-9 appearance-none pr-8", className)} {...props}>
+      <select
+        className={cn(inputBase, "h-9 appearance-none pr-8", className)}
+        {...props}
+      >
         {children}
       </select>
       <ChevronDown
-        className="pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2 text-ink-subtle"
+        className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-subtle"
         aria-hidden="true"
       />
     </div>
@@ -205,83 +263,210 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
 }
 
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cn(controlClasses, "min-h-20 py-2", className)} {...props} />;
+  return <textarea className={cn(inputBase, "min-h-20", className)} {...props} />;
 }
 
 export function Stat({
   label,
   value,
-  suffix,
-  accent,
-  hint,
-  icon,
+  sub,
+  tone = "neutral",
 }: {
   label: string;
   value: string | number;
-  suffix?: string;
-  accent?: "teal" | "amber" | "red";
-  hint?: string;
-  icon?: ReactNode;
+  sub?: string;
+  tone?: "neutral" | "ok" | "warn" | "bad" | "accent";
 }) {
-  const colors = {
-    teal: "text-accent",
-    amber: "text-amber-700",
-    red: "text-red-700",
-  };
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-ink-muted">{label}</p>
-        {icon ? <span className="text-ink-subtle">{icon}</span> : null}
-      </div>
-      <p className={cn("tabular mt-2 text-2xl font-semibold tracking-tight", accent ? colors[accent] : "text-ink")}>
+    <div className="rounded-xl border border-line bg-surface px-4 py-3.5">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-ink-subtle">{label}</p>
+      <p
+        className={cn(
+          "mt-1 text-2xl font-semibold tracking-tight tabular",
+          tone === "ok" && "text-ok",
+          tone === "warn" && "text-warn",
+          tone === "bad" && "text-bad",
+          tone === "accent" && "text-accent",
+          tone === "neutral" && "text-ink",
+        )}
+      >
         {value}
-        {suffix ? <span className="ml-1 text-sm font-normal text-ink-subtle">{suffix}</span> : null}
       </p>
-      {hint ? <p className="mt-1 text-[11px] text-ink-subtle">{hint}</p> : null}
-    </Card>
+      {sub ? <p className="mt-0.5 text-xs text-ink-subtle">{sub}</p> : null}
+    </div>
+  );
+}
+
+export function MetricStrip({
+  children,
+  className,
+  "data-testid": dataTestId,
+}: {
+  children: ReactNode;
+  className?: string;
+  "data-testid"?: string;
+}) {
+  return (
+    <div
+      data-testid={dataTestId}
+      className={cn(
+        "grid grid-cols-2 divide-y divide-x divide-line overflow-hidden rounded-xl border border-line bg-surface sm:grid-cols-4 xl:grid-cols-8 xl:divide-y-0",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function MetricCell({
+  label,
+  value,
+  sub,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  tone?: "neutral" | "ok" | "warn" | "bad" | "accent";
+}) {
+  return (
+    <div className="flex flex-col justify-between px-4 py-3.5">
+      <span className="text-[11px] font-medium text-ink-subtle">{label}</span>
+      <div className="mt-1.5 flex items-baseline justify-between gap-2">
+        <span
+          className={cn(
+            "text-xl font-semibold tracking-tight tabular",
+            tone === "ok" && "text-ok",
+            tone === "warn" && "text-warn",
+            tone === "bad" && "text-bad",
+            tone === "accent" && "text-accent",
+            tone === "neutral" && "text-ink",
+          )}
+        >
+          {value}
+        </span>
+      </div>
+      {sub ? <span className="mt-0.5 truncate text-[11px] text-ink-subtle">{sub}</span> : null}
+    </div>
+  );
+}
+
+export function SegmentedTabs<T extends string>({
+  value,
+  onChange,
+  options,
+  className,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: { value: T; label: string; count?: number }[];
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex flex-wrap items-center gap-1 rounded-lg border border-line bg-surface-subtle p-1",
+        className,
+      )}
+      role="tablist"
+    >
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              active
+                ? "bg-surface text-ink shadow-xs ring-1 ring-line"
+                : "text-ink-muted hover:text-ink",
+            )}
+          >
+            <span>{opt.label}</span>
+            {opt.count !== undefined ? (
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0 text-[10px] tabular",
+                  active ? "bg-accent-soft text-accent" : "bg-surface-muted text-ink-subtle",
+                )}
+              >
+                {opt.count}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function KeyValueRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5 text-sm">
+      <span className="text-ink-subtle">{label}</span>
+      <span className={cn("text-right font-medium text-ink", mono && "font-mono text-xs")}>
+        {value}
+      </span>
+    </div>
   );
 }
 
 export function PageHeader({
-  eyebrow,
   title,
   description,
-  actions,
+  eyebrow,
+  action,
 }: {
-  eyebrow?: string;
   title: string;
   description?: string;
-  actions?: ReactNode;
+  eyebrow?: string;
+  action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-5">
+    <div className="flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {eyebrow ? (
-          <p className="text-[11px] font-semibold tracking-wider text-accent uppercase">{eyebrow}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+            {eyebrow}
+          </p>
         ) : null}
-        <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-ink">{title}</h1>
-        {description ? <p className="mt-1 max-w-2xl text-sm text-ink-muted">{description}</p> : null}
+        <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+          {title}
+        </h1>
+        {description ? <p className="mt-1 text-sm text-ink-muted">{description}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {action ? <div className="flex flex-wrap items-center gap-2.5">{action}</div> : null}
     </div>
   );
 }
 
 export function SectionTitle({
   title,
-  caption,
+  description,
   action,
 }: {
   title: string;
-  caption?: string;
+  description?: string;
   action?: ReactNode;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
-        {caption ? <p className="mt-0.5 text-xs text-ink-muted">{caption}</p> : null}
+        <h2 className="text-sm font-semibold tracking-tight text-ink">{title}</h2>
+        {description ? <p className="mt-0.5 text-xs text-ink-subtle">{description}</p> : null}
       </div>
       {action}
     </div>
@@ -290,27 +475,30 @@ export function SectionTitle({
 
 export function Spinner({ label = "Loading" }: { label?: string }) {
   return (
-    <div className="flex items-center gap-2.5 py-8 text-sm text-ink-muted" role="status">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-border-strong border-t-accent" />
+    <div className="inline-flex items-center gap-2 text-xs font-medium text-ink-subtle">
+      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line-strong border-t-accent" />
       <span>{label}</span>
     </div>
   );
 }
 
 export function EmptyState({
+  icon,
   title,
   body,
-  icon,
+  action,
 }: {
+  icon?: ReactNode;
   title: string;
   body?: string;
-  icon?: ReactNode;
+  action?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-border-strong bg-surface-subtle/50 px-6 py-9 text-center">
-      {icon ? <div className="mx-auto mb-2 flex justify-center text-ink-subtle">{icon}</div> : null}
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line-strong bg-surface-subtle/50 px-6 py-10 text-center">
+      {icon ? <div className="mb-2.5 text-ink-subtle">{icon}</div> : null}
       <p className="text-sm font-medium text-ink">{title}</p>
-      {body ? <p className="mt-1 text-xs text-ink-muted">{body}</p> : null}
+      {body ? <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-subtle">{body}</p> : null}
+      {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
 }
@@ -318,10 +506,10 @@ export function EmptyState({
 export function ErrorNote({ message }: { message: string }) {
   return (
     <div
-      className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-800"
       role="alert"
+      className="flex items-start gap-2.5 rounded-lg border border-bad-border bg-bad-soft px-3.5 py-2.5 text-xs font-medium text-bad"
     >
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden="true" />
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
       <span>{message}</span>
     </div>
   );
@@ -329,8 +517,11 @@ export function ErrorNote({ message }: { message: string }) {
 
 export function SuccessNote({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-800">
-      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+    <div
+      role="status"
+      className="flex items-start gap-2.5 rounded-lg border border-ok-border bg-ok-soft px-3.5 py-2.5 text-xs font-medium text-ok"
+    >
+      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
       <span>{message}</span>
     </div>
   );
@@ -340,53 +531,48 @@ export function Modal({
   open,
   onClose,
   title,
-  subtitle,
+  description,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
-  subtitle?: string;
+  description?: string;
   children: ReactNode;
 }) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!open) return null;
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/35 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/35 p-4 backdrop-blur-[1px]"
       role="dialog"
       aria-modal="true"
-      aria-label={title}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
     >
-      <Card className="w-full max-w-lg overflow-hidden shadow-lg">
-        <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-line bg-surface shadow-xl">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>
-            <h3 className="text-base font-semibold text-ink">{title}</h3>
-            {subtitle ? <p className="mt-0.5 text-xs text-ink-muted">{subtitle}</p> : null}
+            <h3 className="text-base font-semibold tracking-tight text-ink">{title}</h3>
+            {description ? <p className="mt-0.5 text-xs text-ink-subtle">{description}</p> : null}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-ink-subtle transition-colors hover:bg-surface-subtle hover:text-ink"
-            aria-label="Close dialog"
+            aria-label="Close modal"
+            className="rounded-lg p-1.5 text-ink-subtle hover:bg-surface-subtle hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="p-5">{children}</div>
-      </Card>
+      </div>
     </div>
   );
 }

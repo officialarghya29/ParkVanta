@@ -1,77 +1,114 @@
 import {
   Activity,
   Building2,
-  Car,
-  ChevronRight,
-  LayoutDashboard,
+  ClipboardList,
   LogOut,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ScanLine,
-  ScrollText,
+  QrCode,
   ShieldCheck,
   X,
 } from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { homeRouteFor, useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
+import type { Role } from "../lib/types";
 import { NotificationCenter } from "./NotificationCenter";
 
-const NAV = [
-  { to: "/resident", label: "Resident", icon: Car, roles: ["RESIDENT"], section: "My visits" },
+interface NavItem {
+  to: string;
+  label: string;
+  shortLabel: string;
+  icon: ComponentType<{ className?: string }>;
+  roles: Role[];
+  end?: boolean;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  {
+    to: "/resident",
+    label: "Visitor passes",
+    shortLabel: "Passes",
+    icon: QrCode,
+    roles: ["RESIDENT"],
+  },
   {
     to: "/guard",
     label: "Gate console",
-    icon: ScanLine,
+    shortLabel: "Gate",
+    icon: ShieldCheck,
     roles: ["SECURITY_GUARD", "SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"],
-    section: "Gate operations",
   },
   {
     to: "/admin",
-    label: "Operations",
-    icon: LayoutDashboard,
+    label: "Overview",
+    shortLabel: "Overview",
+    icon: Activity,
     roles: ["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"],
-    section: "Management",
+    end: true,
   },
   {
     to: "/admin/inventory",
     label: "Inventory",
+    shortLabel: "Inventory",
     icon: Building2,
     roles: ["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"],
-    section: "Management",
   },
   {
     to: "/admin/audit",
     label: "Audit trail",
-    icon: ScrollText,
+    shortLabel: "Audit trail",
+    icon: ClipboardList,
     roles: ["SOCIETY_ADMIN", "SUPER_ADMIN"],
-    section: "Compliance",
   },
 ];
 
-const ROLE_LABEL: Record<string, string> = {
-  SUPER_ADMIN: "Platform owner",
-  SOCIETY_ADMIN: "Society admin",
-  PROPERTY_MANAGER: "Property manager",
-  SECURITY_GUARD: "Security guard",
-  RESIDENT: "Resident",
+const ROUTE_META: Record<string, { title: string; section: string }> = {
+  "/resident": { title: "Visitor Passes", section: "Resident Studio" },
+  "/guard": { title: "Gate Operations", section: "Security Desk" },
+  "/admin": { title: "Operations Overview", section: "Society Workspace" },
+  "/admin/inventory": { title: "Property Inventory", section: "Society Workspace" },
+  "/admin/audit": { title: "Audit Trail", section: "Compliance" },
 };
 
-export function Brand({ compact = false }: { compact?: boolean }) {
+const ROLE_LABELS: Record<Role, string> = {
+  RESIDENT: "Resident",
+  SECURITY_GUARD: "Gate Guard",
+  PROPERTY_MANAGER: "Manager",
+  SOCIETY_ADMIN: "Society Admin",
+  SUPER_ADMIN: "Super Admin",
+};
+
+export function Brand({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
-        <ShieldCheck className="h-4 w-4" strokeWidth={2} />
+    <div className="flex items-center gap-2.5 select-none">
+      <div
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-semibold tracking-tight",
+          dark ? "bg-accent text-white" : "bg-rail text-white",
+        )}
+      >
+        PV
       </div>
       {!compact ? (
-        <div className="leading-tight">
-          <p className="text-sm font-semibold tracking-tight text-ink">ParkVanta</p>
-          <p className="text-[10px] font-medium tracking-wider text-ink-subtle uppercase">
-            Access & Parking
-          </p>
+        <div className="leading-none">
+          <span
+            className={cn(
+              "block text-sm font-semibold tracking-tight",
+              dark ? "text-white" : "text-ink",
+            )}
+          >
+            ParkVanta
+          </span>
+          <span
+            className={cn(
+              "mt-0.5 block text-[10px] font-medium tracking-wide uppercase",
+              dark ? "text-white/55" : "text-ink-subtle",
+            )}
+          >
+            Community Ops
+          </span>
         </div>
       ) : null}
     </div>
@@ -82,259 +119,181 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const visibleNav = user ? NAV_ITEMS.filter((item) => item.roles.includes(user.role)) : [];
+  const routeMeta = ROUTE_META[location.pathname] ?? {
+    title: "Workspace",
+    section: "ParkVanta",
+  };
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
-
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [mobileOpen]);
-
-  if (!user) return null;
-  const items = NAV.filter((item) => item.roles.includes(user.role));
-  const currentItem = items.find((item) => item.to === location.pathname);
-  const initials = user.full_name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
 
   async function handleSignOut() {
     await signOut();
     navigate("/login", { replace: true });
   }
 
-  const sidebarNav = (
-    <nav className="flex-1 space-y-1 px-2.5 py-3" aria-label="Primary navigation">
-      {items.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.to === "/admin" || item.to === "/resident" || item.to === "/guard"}
-          title={collapsed ? item.label : undefined}
-          className={({ isActive }) =>
-            cn(
-              "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
-              isActive
-                ? "bg-accent-soft text-accent"
-                : "text-ink-muted hover:bg-surface-subtle hover:text-ink",
-              collapsed && "justify-center px-2",
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <item.icon
-                className={cn(
-                  "h-4 w-4 shrink-0",
-                  isActive ? "text-accent" : "text-ink-subtle group-hover:text-ink",
-                )}
-                strokeWidth={1.8}
-              />
-              {!collapsed ? <span className="truncate">{item.label}</span> : null}
-            </>
-          )}
-        </NavLink>
-      ))}
-    </nav>
-  );
-
   return (
     <div className="flex min-h-screen bg-canvas text-ink">
-      {/* Desktop Sidebar */}
-      <aside
-        className={cn(
-          "no-print hidden shrink-0 flex-col border-r border-border bg-white transition-[width] duration-150 md:flex",
-          collapsed ? "w-16" : "w-60",
-        )}
-      >
-        <div
-          className={cn(
-            "flex h-14 items-center border-b border-border px-3.5",
-            collapsed ? "justify-center" : "justify-between",
-          )}
-        >
-          <NavLink to={homeRouteFor(user.role)} className="flex items-center">
-            <Brand compact={collapsed} />
-          </NavLink>
-        </div>
+      {/* Desktop Studio Tool Rail (Adobe Express inspired slim vertical rail) */}
+      <aside className="hidden lg:flex lg:w-[84px] lg:shrink-0 lg:flex-col lg:items-center lg:justify-between lg:border-r lg:border-rail-border lg:bg-rail lg:py-4 print-hidden">
+        <div className="flex w-full flex-col items-center gap-5">
+          <button
+            type="button"
+            onClick={() => navigate(user ? homeRouteFor(user.role) : "/")}
+            aria-label="ParkVanta home"
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-white font-mono text-sm font-semibold shadow-xs transition hover:bg-accent-hover"
+          >
+            PV
+          </button>
 
-        {sidebarNav}
-
-        <div className="border-t border-border p-3">
-          {!collapsed ? (
-            <div className="flex items-center gap-2.5 rounded-lg bg-surface-subtle px-2.5 py-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-ink text-xs font-semibold text-white">
-                {initials || "PV"}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-ink">{user.full_name}</p>
-                <p className="truncate text-[11px] text-ink-subtle">
-                  {ROLE_LABEL[user.role] ?? user.role}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="rounded-md p-1.5 text-ink-subtle transition-colors hover:bg-white hover:text-red-700"
-                aria-label="Sign out"
-                title="Sign out"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="flex w-full items-center justify-center rounded-lg p-2 text-ink-subtle transition-colors hover:bg-surface-subtle hover:text-red-700"
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      </aside>
-
-      {/* Mobile Drawer */}
-      {mobileOpen ? (
-        <div
-          className="no-print fixed inset-0 z-50 flex md:hidden"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Navigation menu"
-        >
-          <div
-            className="fixed inset-0 bg-zinc-950/35"
-            onClick={() => setMobileOpen(false)}
-          />
-          <aside className="relative z-10 flex w-64 flex-col border-r border-border bg-white shadow-xl">
-            <div className="flex h-14 items-center justify-between border-b border-border px-4">
-              <NavLink to={homeRouteFor(user.role)} onClick={() => setMobileOpen(false)}>
-                <Brand />
-              </NavLink>
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                className="rounded-md p-1.5 text-ink-muted hover:bg-surface-subtle hover:text-ink"
-                aria-label="Close navigation menu"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <nav className="flex-1 space-y-1 px-3 py-3" aria-label="Mobile navigation">
-              {items.map((item) => (
+          <nav aria-label="Workspace navigation" className="flex w-full flex-col items-center gap-1.5 px-2">
+            {visibleNav.map((item) => {
+              const Icon = item.icon;
+              return (
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  end={item.to === "/admin" || item.to === "/resident" || item.to === "/guard"}
+                  end={item.end}
+                  aria-label={item.label}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                      "group flex w-full flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2.5 text-center transition-colors",
                       isActive
-                        ? "bg-accent-soft text-accent"
-                        : "text-ink-muted hover:bg-surface-subtle hover:text-ink",
+                        ? "bg-white text-ink shadow-xs"
+                        : "text-white/65 hover:bg-rail-elevated hover:text-white",
                     )
                   }
                 >
-                  <item.icon className="h-4 w-4 shrink-0" strokeWidth={1.8} />
-                  <span>{item.label}</span>
+                  <Icon className="h-[18px] w-[18px] shrink-0" />
+                  <span className="text-[10.5px] font-medium leading-tight">{item.shortLabel}</span>
                 </NavLink>
-              ))}
-            </nav>
-            <div className="border-t border-border p-3">
-              <div className="flex items-center justify-between gap-2 rounded-lg bg-surface-subtle px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-ink">{user.full_name}</p>
-                  <p className="truncate text-[11px] text-ink-subtle">
-                    {ROLE_LABEL[user.role] ?? user.role}
-                  </p>
-                </div>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div className="flex w-full flex-col items-center gap-2 px-2">
+          <button
+            type="button"
+            onClick={handleSignOut}
+            title="Sign out"
+            className="flex w-full flex-col items-center gap-1 rounded-xl px-1.5 py-2 text-white/60 transition hover:bg-rail-elevated hover:text-white"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="text-[10px] font-medium">Sign out</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile Navigation Drawer */}
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-50 flex lg:hidden print-hidden">
+          <div
+            className="fixed inset-0 bg-ink/40"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="relative z-10 flex w-64 flex-col justify-between bg-rail p-4 text-white shadow-2xl">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <Brand dark />
                 <button
                   type="button"
-                  onClick={handleSignOut}
-                  className="inline-flex items-center gap-1 rounded-md border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-ink hover:text-red-700"
+                  onClick={() => setMobileOpen(false)}
+                  aria-label="Close navigation"
+                  className="rounded-lg p-1.5 text-white/70 hover:bg-rail-elevated hover:text-white"
                 >
-                  <LogOut className="h-3.5 w-3.5" /> Sign out
+                  <X className="h-4 w-4" />
                 </button>
               </div>
+              <nav aria-label="Mobile workspace navigation" className="space-y-1">
+                {visibleNav.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-white text-ink"
+                            : "text-white/75 hover:bg-rail-elevated hover:text-white",
+                        )
+                      }
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  );
+                })}
+              </nav>
+            </div>
+            <div className="border-t border-rail-border pt-4">
+              {user ? (
+                <div className="mb-3 px-1">
+                  <p className="truncate text-xs font-medium text-white">{user.full_name}</p>
+                  <p className="truncate text-[11px] text-white/55">{ROLE_LABELS[user.role]}</p>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-white/75 hover:bg-rail-elevated hover:text-white"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign out</span>
+              </button>
             </div>
           </aside>
         </div>
       ) : null}
 
-      {/* Main Column */}
+      {/* Main Studio Shell Column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="no-print sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b border-border bg-white px-4 sm:px-6">
-          <div className="flex items-center gap-2.5 min-w-0">
+        {/* Crisp Studio Top Utility Bar */}
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-surface px-4 sm:px-6 print-hidden">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-ink-muted hover:bg-surface-subtle hover:text-ink md:hidden"
-              aria-label="Open navigation menu"
+              aria-label="Open navigation"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-muted hover:bg-surface-subtle lg:hidden"
             >
               <Menu className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => setCollapsed((value) => !value)}
-              className="hidden h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-surface-subtle hover:text-ink md:inline-flex"
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {collapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4" />
-              )}
-            </button>
-            <div className="flex items-center gap-1.5 text-xs text-ink-subtle truncate">
-              <span className="hidden sm:inline font-medium text-ink-muted">ParkVanta</span>
-              {currentItem ? (
-                <>
-                  <ChevronRight className="hidden h-3.5 w-3.5 sm:inline" aria-hidden="true" />
-                  <span className="truncate font-medium text-ink">{currentItem.label}</span>
-                </>
-              ) : null}
+            <div className="flex min-w-0 items-center gap-2 text-xs">
+              <span className="hidden font-medium text-ink-subtle sm:inline">{routeMeta.section}</span>
+              <span className="hidden text-ink-subtle/50 sm:inline">/</span>
+              <span className="truncate text-sm font-semibold tracking-tight text-ink">
+                {routeMeta.title}
+              </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2.5">
-            <span className="hidden items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800 sm:inline-flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-              System online
-            </span>
+            {user ? (
+              <div className="hidden items-center gap-2 rounded-full border border-line bg-surface-subtle px-3 py-1 sm:flex">
+                <span className="text-xs font-medium text-ink">{user.full_name}</span>
+                <span className="h-3 w-px bg-line-strong" />
+                <span className="text-[11px] font-medium text-ink-subtle">
+                  {ROLE_LABELS[user.role]}
+                </span>
+              </div>
+            ) : null}
             <NotificationCenter />
-            <div className="hidden items-center gap-2 border-l border-border pl-2.5 lg:flex">
-              <span className="text-xs font-medium text-ink">{user.full_name}</span>
-              <span className="rounded bg-surface-subtle px-1.5 py-0.5 text-[11px] text-ink-subtle">
-                {ROLE_LABEL[user.role] ?? user.role}
-              </span>
-            </div>
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        {/* Studio Main Canvas */}
+        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
           {children}
         </main>
-
-        <footer className="no-print mx-auto flex w-full max-w-[1360px] flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-4 text-xs text-ink-subtle sm:px-6 lg:px-8">
-          <span className="font-medium">ParkVanta · Residential Access & Parking Operations</span>
-          <span className="flex items-center gap-1.5">
-            <Activity className="h-3.5 w-3.5" aria-hidden="true" />
-            PostgreSQL authoritative · Redis advisory
-          </span>
-        </footer>
       </div>
     </div>
   );

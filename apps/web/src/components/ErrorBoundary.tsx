@@ -28,17 +28,17 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div
         data-testid="app-error"
-        className="flex min-h-screen items-center justify-center p-6"
+        className="flex min-h-screen items-center justify-center bg-canvas p-6"
       >
-        <Card className="w-full max-w-lg p-8 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-red-400/30 bg-red-500/10">
-            <AlertTriangle className="h-6 w-6 text-red-300" />
+        <Card className="w-full max-w-md p-7 text-center">
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg border border-red-200 bg-red-50">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
           </div>
-          <p className="mt-5 font-mono text-[10px] tracking-[0.2em] text-red-300 uppercase">
+          <p className="mt-4 text-xs font-semibold tracking-wider text-red-700 uppercase">
             Interface recovered
           </p>
-          <h1 className="mt-2 text-xl font-semibold text-white">This screen hit an unexpected error.</h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-400">
+          <h1 className="mt-1.5 text-lg font-semibold text-ink">This screen hit an unexpected error.</h1>
+          <p className="mt-2 text-sm leading-relaxed text-ink-muted">
             The gate ledger is safe in PostgreSQL. Reload the interface to restore the latest
             server state; no local action was submitted by this screen.
           </p>

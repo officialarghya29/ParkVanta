@@ -37,17 +37,19 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
       <div className="w-full max-w-md">
-        <div className="mb-8">
+        <div className="mb-6">
           <Brand />
         </div>
         <Card className="p-7">
           {done ? (
             <div className="text-center">
-              <CheckCircle2 className="mx-auto h-10 w-10 text-teal-bright" />
-              <h1 className="mt-4 text-2xl font-semibold text-white">Password updated</h1>
-              <p className="mt-2 text-sm text-slate-400">
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <h1 className="mt-4 text-xl font-semibold text-ink">Password updated</h1>
+              <p className="mt-2 text-sm text-ink-muted">
                 All existing sessions were revoked. Sign in with your new password.
               </p>
               <Link to="/login" className="mt-6 inline-flex w-full">
@@ -58,15 +60,15 @@ export function ResetPasswordPage() {
             </div>
           ) : (
             <>
-              <p className="font-mono text-[10px] tracking-[0.2em] text-slate-500 uppercase">Account recovery</p>
-              <h1 className="mt-2 text-2xl font-semibold text-white">Choose a new password</h1>
+              <p className="text-xs font-semibold tracking-wider text-accent uppercase">Account recovery</p>
+              <h1 className="mt-1 text-xl font-semibold tracking-tight text-ink">Choose a new password</h1>
               {!token ? (
                 <div className="mt-4">
                   <ErrorNote message="This link is missing its reset token. Request a new link." />
                 </div>
               ) : (
-                <form className="mt-6 space-y-4" onSubmit={submit}>
-                  <Field label="New password" hint="letters and digits">
+                <form className="mt-5 space-y-4" onSubmit={submit}>
+                  <Field label="New password" hint="letters and digits" required>
                     <Input
                       required
                       type="password"
@@ -76,7 +78,7 @@ export function ResetPasswordPage() {
                       autoComplete="new-password"
                     />
                   </Field>
-                  <Field label="Confirm password">
+                  <Field label="Confirm password" required>
                     <Input
                       required
                       type="password"
@@ -95,8 +97,8 @@ export function ResetPasswordPage() {
               )}
             </>
           )}
-          <div className="mt-6 border-t border-white/[0.08] pt-4 text-xs">
-            <Link to="/forgot-password" className="text-slate-400 hover:text-white">
+          <div className="mt-6 border-t border-border pt-4 text-xs">
+            <Link to="/forgot-password" className="font-medium text-ink-muted hover:text-ink">
               Request a new reset link
             </Link>
           </div>

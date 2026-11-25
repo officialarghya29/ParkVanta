@@ -27,30 +27,32 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
       <div className="w-full max-w-md">
-        <div className="mb-8">
+        <div className="mb-6">
           <Brand />
         </div>
         <Card className="p-7">
           {sent ? (
             <div className="text-center">
-              <MailCheck className="mx-auto h-10 w-10 text-teal-bright" />
-              <h1 className="mt-4 text-2xl font-semibold text-white">Check your inbox</h1>
-              <p className="mt-2 text-sm text-slate-400">
-                If an account exists for {email}, a reset link is on its way. The link expires in 30
-                minutes.
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+                <MailCheck className="h-5 w-5" />
+              </div>
+              <h1 className="mt-4 text-xl font-semibold text-ink">Check your inbox</h1>
+              <p className="mt-2 text-sm text-ink-muted">
+                If an account exists for <span className="font-medium text-ink">{email}</span>, a
+                single-use reset link is on its way. It expires in 30 minutes.
               </p>
             </div>
           ) : (
             <>
-              <p className="font-mono text-[10px] tracking-[0.2em] text-slate-500 uppercase">Account recovery</p>
-              <h1 className="mt-2 text-2xl font-semibold text-white">Reset your password</h1>
-              <p className="mt-1 text-sm text-slate-500">
-                We will email a single-use link to the address on your account.
+              <p className="text-xs font-semibold tracking-wider text-accent uppercase">Account recovery</p>
+              <h1 className="mt-1 text-xl font-semibold tracking-tight text-ink">Reset your password</h1>
+              <p className="mt-1 text-sm text-ink-muted">
+                We will email a single-use reset link to the address on your account.
               </p>
-              <form className="mt-6 space-y-4" onSubmit={submit}>
-                <Field label="Email">
+              <form className="mt-5 space-y-4" onSubmit={submit}>
+                <Field label="Email address" required>
                   <Input
                     required
                     type="email"
@@ -67,8 +69,8 @@ export function ForgotPasswordPage() {
               </form>
             </>
           )}
-          <div className="mt-6 border-t border-white/[0.08] pt-4 text-xs">
-            <Link to="/login" className="inline-flex items-center gap-1 text-slate-400 hover:text-white">
+          <div className="mt-6 border-t border-border pt-4 text-xs">
+            <Link to="/login" className="inline-flex items-center gap-1 font-medium text-ink-muted hover:text-ink">
               <ArrowLeft className="h-3.5 w-3.5" /> Back to sign in
             </Link>
           </div>

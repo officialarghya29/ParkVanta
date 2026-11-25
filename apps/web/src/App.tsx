@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, homeRouteFor, useAuth } from "./auth/AuthContext";
 import { AppShell } from "./components/AppShell";
-import { Button, Card } from "./components/ui";
+import { Button, Spinner, StudioPane } from "./components/ui";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -12,85 +12,87 @@ import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import type { Role } from "./lib/types";
 
 const AdminPage = lazy(() =>
-  import("./pages/AdminPage").then(({ AdminPage }) => ({ default: AdminPage })),
+  import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })),
 );
 const AuditPage = lazy(() =>
-  import("./pages/AuditPage").then(({ AuditPage }) => ({ default: AuditPage })),
+  import("./pages/AuditPage").then((m) => ({ default: m.AuditPage })),
 );
 const GuardPage = lazy(() =>
-  import("./pages/GuardPage").then(({ GuardPage }) => ({ default: GuardPage })),
+  import("./pages/GuardPage").then((m) => ({ default: m.GuardPage })),
 );
 const InventoryPage = lazy(() =>
-  import("./pages/InventoryPage").then(({ InventoryPage }) => ({ default: InventoryPage })),
+  import("./pages/InventoryPage").then((m) => ({ default: m.InventoryPage })),
 );
 const PassPage = lazy(() =>
-  import("./pages/PassPage").then(({ PassPage }) => ({ default: PassPage })),
+  import("./pages/PassPage").then((m) => ({ default: m.PassPage })),
 );
 const ResidentPage = lazy(() =>
-  import("./pages/ResidentPage").then(({ ResidentPage }) => ({ default: ResidentPage })),
+  import("./pages/ResidentPage").then((m) => ({ default: m.ResidentPage })),
 );
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 10_000, retry: 1, refetchOnWindowFocus: false },
+    queries: {
+      retry: 1,
+      staleTime: 10_000,
+    },
   },
 });
 
-function AuthLoading() {
+function RouteLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas">
-      <div
-        className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-accent"
-        role="status"
-        aria-label="Restoring session"
-      />
+    <div className="flex min-h-[45vh] items-center justify-center">
+      <Spinner label="Loading workspace…" />
     </div>
   );
 }
 
-function Protected({ children, roles }: { children: ReactNode; roles?: Role[] }) {
+function RequireRole({
+  roles,
+  children,
+}: {
+  roles: Role[];
+  children: ReactNode;
+}) {
   const { user, loading } = useAuth();
-  if (loading) return <AuthLoading />;
-  if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) {
-    return <Navigate to={homeRouteFor(user.role)} replace />;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-canvas">
+        <Spinner label="Restoring session…" />
+      </div>
+    );
   }
+  if (!user) return <Navigate to="/login" replace />;
+  if (!roles.includes(user.role)) return <Navigate to={homeRouteFor(user.role)} replace />;
   return <AppShell>{children}</AppShell>;
-}
-
-function PublicOnly({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return <AuthLoading />;
-  if (user) return <Navigate to={homeRouteFor(user.role)} replace />;
-  return children;
 }
 
 function RootRedirect() {
   const { user, loading } = useAuth();
-  if (loading) return <AuthLoading />;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-canvas">
+        <Spinner label="Loading…" />
+      </div>
+    );
+  }
   return <Navigate to={user ? homeRouteFor(user.role) : "/login"} replace />;
 }
 
-function LoginRoute() {
-  const { user, loading } = useAuth();
-  if (loading) return <AuthLoading />;
-  if (user) return <Navigate to={homeRouteFor(user.role)} replace />;
-  return <LoginPage />;
-}
-
 function NotFound() {
+  const { user } = useAuth();
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
-      <Card className="max-w-md p-8 text-center">
-        <p className="font-mono text-xs font-medium text-accent">404</p>
-        <h1 className="mt-2 text-xl font-semibold text-ink">Page not found</h1>
-        <p className="mt-2 text-sm text-ink-muted">
-          This route is not part of the ParkVanta workspace.
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
+      <StudioPane className="w-full max-w-md p-6 text-center">
+        <p className="font-mono text-xs font-semibold uppercase tracking-widest text-accent">404</p>
+        <h1 className="mt-2 text-lg font-semibold text-ink">Page not found</h1>
+        <p className="mt-1 text-sm text-ink-muted">
+          The workspace route you requested does not exist.
         </p>
-        <a href="/" className="mt-5 inline-flex w-full">
-          <Button className="w-full">Return to workspace</Button>
-        </a>
-      </Card>
+        <Button className="mt-5" onClick={() => window.location.assign(user ? homeRouteFor(user.role) : "/login")}>
+          Return to workspace
+        </Button>
+      </StudioPane>
     </div>
   );
 }
@@ -98,82 +100,63 @@ function NotFound() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <Suspense fallback={<AuthLoading />}>
+      <AuthProvider>
+        <BrowserRouter>
+          <Suspense fallback={<RouteLoading />}>
             <Routes>
               <Route path="/" element={<RootRedirect />} />
-              <Route path="/login" element={<LoginRoute />} />
-              <Route
-                path="/register"
-                element={
-                  <PublicOnly>
-                    <RegisterPage />
-                  </PublicOnly>
-                }
-              />
-              <Route
-                path="/forgot-password"
-                element={
-                  <PublicOnly>
-                    <ForgotPasswordPage />
-                  </PublicOnly>
-                }
-              />
-              <Route
-                path="/reset-password"
-                element={
-                  <PublicOnly>
-                    <ResetPasswordPage />
-                  </PublicOnly>
-                }
-              />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/pass/:token" element={<PassPage />} />
               <Route
                 path="/resident"
                 element={
-                  <Protected roles={["RESIDENT"]}>
+                  <RequireRole roles={["RESIDENT"]}>
                     <ResidentPage />
-                  </Protected>
+                  </RequireRole>
                 }
               />
               <Route
                 path="/guard"
                 element={
-                  <Protected roles={["SECURITY_GUARD", "SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}>
+                  <RequireRole
+                    roles={["SECURITY_GUARD", "SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}
+                  >
                     <GuardPage />
-                  </Protected>
+                  </RequireRole>
                 }
               />
               <Route
                 path="/admin"
                 element={
-                  <Protected roles={["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}>
+                  <RequireRole roles={["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}>
                     <AdminPage />
-                  </Protected>
+                  </RequireRole>
                 }
               />
               <Route
                 path="/admin/inventory"
                 element={
-                  <Protected roles={["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}>
+                  <RequireRole roles={["SOCIETY_ADMIN", "PROPERTY_MANAGER", "SUPER_ADMIN"]}>
                     <InventoryPage />
-                  </Protected>
+                  </RequireRole>
                 }
               />
               <Route
                 path="/admin/audit"
                 element={
-                  <Protected roles={["SOCIETY_ADMIN", "SUPER_ADMIN"]}>
+                  <RequireRole roles={["SOCIETY_ADMIN", "SUPER_ADMIN"]}>
                     <AuditPage />
-                  </Protected>
+                  </RequireRole>
                 }
               />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
-        </AuthProvider>
-      </BrowserRouter>
+        </BrowserRouter>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

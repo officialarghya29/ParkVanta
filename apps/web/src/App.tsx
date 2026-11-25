@@ -38,9 +38,9 @@ const queryClient = new QueryClient({
 
 function AuthLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center bg-canvas">
       <div
-        className="h-7 w-7 animate-spin rounded-full border-2 border-teal/20 border-t-teal-bright"
+        className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-accent"
         role="status"
         aria-label="Restoring session"
       />
@@ -80,13 +80,15 @@ function LoginRoute() {
 
 function NotFound() {
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
       <Card className="max-w-md p-8 text-center">
-        <p className="font-mono text-[10px] tracking-[0.2em] text-teal-bright uppercase">404</p>
-        <h1 className="mt-2 text-xl font-semibold text-white">Signal lost</h1>
-        <p className="mt-2 text-sm text-slate-400">This route is not part of the ParkVanta surface.</p>
+        <p className="font-mono text-xs font-medium text-accent">404</p>
+        <h1 className="mt-2 text-xl font-semibold text-ink">Page not found</h1>
+        <p className="mt-2 text-sm text-ink-muted">
+          This route is not part of the ParkVanta workspace.
+        </p>
         <a href="/" className="mt-5 inline-flex w-full">
-          <Button className="w-full">Return to control room</Button>
+          <Button className="w-full">Return to workspace</Button>
         </a>
       </Card>
     </div>

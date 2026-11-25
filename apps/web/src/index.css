@@ -1,16 +1,20 @@
 @import "tailwindcss";
 
 @theme {
-  --color-abyss: #060b14;
-  --color-abyss-soft: #0a1220;
-  --color-navy: #101b2d;
-  --color-navy-line: #1b2a41;
-  --color-teal: #16a394;
-  --color-teal-bright: #2ee6c8;
-  --color-mist: #f5f7fa;
-  --color-ink: #172033;
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-canvas: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f3f4f6;
+  --color-ink: #18181b;
+  --color-ink-muted: #52525b;
+  --color-ink-subtle: #71717a;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-accent: #0f766e;
+  --color-accent-hover: #115e59;
+  --color-accent-soft: #f0fdfa;
+  --color-accent-border: #99f6e4;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
 html,
@@ -21,60 +25,66 @@ body,
 
 body {
   margin: 0;
-  background-color: var(--color-abyss);
-  color: #dbe4f0;
-  font-family: var(--font-display);
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-  background-image:
-    radial-gradient(circle at 12% -10%, rgba(22, 163, 148, 0.18), transparent 42%),
-    radial-gradient(circle at 88% 0%, rgba(37, 99, 235, 0.12), transparent 40%),
-    linear-gradient(180deg, #060b14 0%, #070f1c 55%, #060b14 100%);
-  background-attachment: fixed;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
-  background: rgba(46, 230, 200, 0.25);
+  background: rgba(15, 118, 110, 0.14);
+  color: var(--color-ink);
 }
 
 *:focus-visible {
-  outline: 2px solid var(--color-teal-bright);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
-.glass {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(14px);
-}
-
-.hairline {
-  background-image: linear-gradient(90deg, transparent, rgba(46, 230, 200, 0.4), transparent);
-  height: 1px;
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 .scan-frame {
   position: relative;
   overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  background: #09090b;
 }
 
 .scan-frame::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 0%, rgba(46, 230, 200, 0.16) 50%, transparent 100%);
-  animation: scan 3.4s ease-in-out infinite;
+  inset-x: 0;
+  top: 0;
+  height: 2px;
+  background: #14b8a6;
+  animation: scan 2.8s ease-in-out infinite;
   pointer-events: none;
 }
 
 @keyframes scan {
-  0% {
-    transform: translateY(-100%);
-  }
+  0%,
   100% {
-    transform: translateY(100%);
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(220px);
+    opacity: 0.9;
   }
 }
 
-.tabular {
-  font-variant-numeric: tabular-nums;
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-card {
+    box-shadow: none !important;
+    border-color: #d4d4d8 !important;
+  }
 }

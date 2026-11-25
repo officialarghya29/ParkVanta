@@ -14,6 +14,7 @@ import {
   Badge,
   Card,
   EmptyState,
+  PageHeader,
   SectionTitle,
   Spinner,
   Stat,
@@ -35,11 +36,11 @@ import type {
 } from "../lib/types";
 
 const SLOT_TONE: Record<string, string> = {
-  AVAILABLE: "border-teal/40 bg-teal/10 text-teal-bright",
-  RESERVED: "border-amber-400/40 bg-amber-400/10 text-amber-200",
-  OCCUPIED: "border-sky-400/40 bg-sky-500/10 text-sky-200",
-  BLOCKED: "border-red-400/30 bg-red-500/10 text-red-200",
-  MAINTENANCE: "border-white/20 bg-white/5 text-slate-300",
+  AVAILABLE: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  RESERVED: "border-amber-200 bg-amber-50 text-amber-800",
+  OCCUPIED: "border-sky-200 bg-sky-50 text-sky-800",
+  BLOCKED: "border-red-200 bg-red-50 text-red-800",
+  MAINTENANCE: "border-border bg-surface-subtle text-ink-muted",
 };
 
 export function AdminPage() {
@@ -118,28 +119,25 @@ export function AdminPage() {
   }));
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] tracking-[0.24em] text-teal-bright uppercase">
-            Operations control
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">{property?.name ?? "Society"}</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            {[property?.address_line, property?.city].filter(Boolean).join(", ") ||
-              "Live parking and gate telemetry"}
-          </p>
-        </div>
-        <Badge tone={live ? "teal" : "slate"}>
-          <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-teal-bright" : "bg-slate-500"}`} />
-          {live ? "Live telemetry" : "Refreshing every 20s"}
-        </Badge>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Operations overview"
+        title={property?.name ?? "Society operations"}
+        description={
+          [property?.address_line, property?.city].filter(Boolean).join(", ") ||
+          "Live parking allocation and gate telemetry"
+        }
+        actions={
+          <Badge tone={live ? "teal" : "slate"} dot>
+            {live ? "Live telemetry" : "Refreshing every 20s"}
+          </Badge>
+        }
+      />
 
       {overview.isLoading ? <Spinner label="Loading operational telemetry" /> : null}
 
       {data ? (
-        <div data-testid="overview" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div data-testid="overview" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Total capacity" value={data.total_slots} suffix="slots" />
           <Stat label="Available" value={data.available_slots} accent="teal" />
           <Stat label="Occupied" value={data.occupied_slots} />
@@ -164,59 +162,82 @@ export function AdminPage() {
         <Card className="p-6">
           <SectionTitle
             title="Visitor traffic"
-            caption="Invitations, confirmed entries and exits · last 14 days"
-            action={<Gauge className="h-4 w-4 text-teal/70" />}
+            caption="Invitations vs. confirmed entries · last 14 days"
+            action={<Gauge className="h-4 w-4 text-ink-subtle" />}
           />
           <div className="mt-4 h-60">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                 <defs>
                   <linearGradient id="invitations" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2ee6c8" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="#2ee6c8" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#0f766e" stopOpacity={0.22} />
+                    <stop offset="100%" stopColor="#0f766e" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="entries" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#60a5fa" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#2563eb" stopOpacity={0.18} />
+                    <stop offset="100%" stopColor="#2563eb" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <CartesianGrid stroke="#e4e4e7" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: "#71717a", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tick={{ fill: "#71717a", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  allowDecimals={false}
+                />
                 <Tooltip
                   contentStyle={{
-                    background: "#0a1220",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: 12,
+                    background: "#ffffff",
+                    border: "1px solid #e4e4e7",
+                    borderRadius: 8,
                     fontSize: 12,
+                    color: "#18181b",
+                    boxShadow: "0 4px 12px rgba(16, 24, 40, 0.08)",
                   }}
-                  labelStyle={{ color: "#e2e8f0" }}
                 />
-                <Area type="monotone" dataKey="invitations" stroke="#2ee6c8" fill="url(#invitations)" strokeWidth={2} />
-                <Area type="monotone" dataKey="entries" stroke="#60a5fa" fill="url(#entries)" strokeWidth={2} />
+                <Area
+                  type="monotone"
+                  dataKey="invitations"
+                  stroke="#0f766e"
+                  fill="url(#invitations)"
+                  strokeWidth={2}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="entries"
+                  stroke="#2563eb"
+                  fill="url(#entries)"
+                  strokeWidth={2}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </Card>
 
         <Card className="p-6">
-          <SectionTitle title="Utilisation by zone" caption="Reserved + occupied / capacity" />
+          <SectionTitle title="Utilisation by zone" caption="Reserved + occupied vs. zone capacity" />
           <div className="mt-5 space-y-4">
             {utilization.data?.length ? (
               utilization.data.map((row) => (
                 <div key={row.category}>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2 text-slate-200">
-                      <Car className="h-3.5 w-3.5 text-teal/70" />
+                    <span className="flex items-center gap-2 font-medium text-ink">
+                      <Car className="h-3.5 w-3.5 text-accent" />
                       {titleCase(row.category)}
                     </span>
-                    <span className="tabular font-mono text-xs text-slate-400">
-                      {row.reserved + row.occupied}/{row.total}
+                    <span className="tabular font-mono text-xs text-ink-muted">
+                      {row.reserved + row.occupied}/{row.total} ({row.utilization_percent}%)
                     </span>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-subtle">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-teal to-teal-bright"
+                      className="h-full rounded-full bg-accent transition-[width]"
                       style={{ width: `${Math.min(row.utilization_percent, 100)}%` }}
                     />
                   </div>
@@ -231,23 +252,23 @@ export function AdminPage() {
 
       <Card className="p-6">
         <SectionTitle
-          title="Parking map"
-          caption={`${slots.data?.total ?? 0} slots · live database state`}
+          title="Parking bay map"
+          caption={`${slots.data?.total ?? 0} bays · authoritative PostgreSQL state`}
           action={
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {["AVAILABLE", "RESERVED", "OCCUPIED", "BLOCKED"].map((status) => (
-                <Badge key={status} tone={statusTone(status)}>
+                <Badge key={status} tone={statusTone(status)} dot>
                   {status}
                 </Badge>
               ))}
             </div>
           }
         />
-        <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-10">
+        <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-10">
           {slots.data?.items.map((slot) => (
             <div
               key={slot.id}
-              className={`rounded-lg border px-2 py-3 text-center font-mono text-[11px] ${SLOT_TONE[slot.status] ?? SLOT_TONE.MAINTENANCE}`}
+              className={`rounded-lg border px-2 py-2.5 text-center font-mono text-xs font-medium ${SLOT_TONE[slot.status] ?? SLOT_TONE.MAINTENANCE}`}
               title={`${titleCase(slot.category)} · ${slot.vehicle_category}`}
             >
               {slot.code}
@@ -258,17 +279,17 @@ export function AdminPage() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="p-6">
-          <SectionTitle title="Active reservations" caption="Slot held, entry not yet confirmed" />
-          <div className="mt-4 space-y-3">
+          <SectionTitle title="Active reservations" caption="Bay held, entry not yet confirmed" />
+          <div className="mt-4 space-y-2.5">
             {reservations.data?.items.length ? (
               reservations.data.items.map((reservation) => (
                 <div
                   key={reservation.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-subtle/50 px-4 py-3"
                 >
                   <div>
-                    <p className="text-sm text-white">{reservation.visitor_name}</p>
-                    <p className="font-mono text-[11px] text-slate-500">
+                    <p className="text-sm font-medium text-ink">{reservation.visitor_name}</p>
+                    <p className="font-mono text-xs text-ink-muted">
                       {reservation.slot_code} · until {formatDateTime(reservation.reserved_until)}
                     </p>
                   </div>
@@ -284,20 +305,20 @@ export function AdminPage() {
         <Card className="p-6">
           <SectionTitle
             title="Overstay watch"
-            caption="Past expected departure, still inside"
-            action={<AlertTriangle className="h-4 w-4 text-amber-300" />}
+            caption="Past expected departure and still inside"
+            action={<AlertTriangle className="h-4 w-4 text-amber-600" />}
           />
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-2.5">
             {overstays.data?.length ? (
               overstays.data.map((row) => (
                 <div
                   key={row.occupancy_id}
-                  className="rounded-xl border border-amber-400/20 bg-amber-400/[0.05] px-4 py-3"
+                  className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
                 >
-                  <p className="text-sm text-white">
+                  <p className="text-sm font-semibold text-amber-950">
                     {row.visitor_name} · {row.slot_code ?? "—"}
                   </p>
-                  <p className="font-mono text-[11px] text-amber-200/80">
+                  <p className="font-mono text-xs text-amber-800">
                     {row.overdue_minutes} minutes past departure
                     {row.vehicle_registration ? ` · ${row.vehicle_registration}` : ""}
                   </p>
@@ -310,48 +331,54 @@ export function AdminPage() {
         </Card>
       </div>
 
-      <Card className="p-6">
-        <SectionTitle
-          title="Gate activity"
-          caption="Every decision is written to the audit trail"
-          action={<ShieldCheck className="h-4 w-4 text-teal/70" />}
-        />
-        <div className="mt-4 overflow-x-auto">
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <SectionTitle
+            title="Recent gate activity"
+            caption="Every decision is recorded atomically in the audit trail"
+          />
+          <ShieldCheck className="h-4 w-4 text-accent" />
+        </div>
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
-              <tr className="border-b border-white/[0.07] font-mono text-[10px] tracking-[0.14em] text-slate-500 uppercase">
-                <th className="py-2 pr-4 font-normal">Time</th>
-                <th className="py-2 pr-4 font-normal">Visitor</th>
-                <th className="py-2 pr-4 font-normal">Direction</th>
-                <th className="py-2 pr-4 font-normal">Decision</th>
-                <th className="py-2 pr-4 font-normal">Guard</th>
-                <th className="py-2 font-normal">Reason</th>
+              <tr className="border-b border-border bg-surface-subtle/70 text-[11px] font-semibold tracking-wider text-ink-subtle uppercase">
+                <th className="px-6 py-3">Time</th>
+                <th className="py-3 pr-4">Visitor</th>
+                <th className="py-3 pr-4">Direction</th>
+                <th className="py-3 pr-4">Decision</th>
+                <th className="py-3 pr-4">Guard</th>
+                <th className="py-3 pr-6">Reason</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border">
               {activity.data?.map((event) => (
-                <tr key={event.id} className="border-b border-white/[0.04] text-slate-300">
-                  <td className="py-2.5 pr-4 font-mono text-xs text-slate-500">
+                <tr key={event.id} className="hover:bg-surface-subtle/40">
+                  <td className="px-6 py-3 font-mono text-xs text-ink-muted">
                     {formatTime(event.created_at)}
                   </td>
-                  <td className="py-2.5 pr-4">{event.visitor_name ?? "—"}</td>
-                  <td className="py-2.5 pr-4">{titleCase(event.direction)}</td>
-                  <td className="py-2.5 pr-4">
+                  <td className="py-3 pr-4 font-medium text-ink">{event.visitor_name ?? "—"}</td>
+                  <td className="py-3 pr-4 text-ink-muted">{titleCase(event.direction)}</td>
+                  <td className="py-3 pr-4">
                     <Badge tone={statusTone(event.decision)}>{titleCase(event.decision)}</Badge>
                   </td>
-                  <td className="py-2.5 pr-4 text-slate-400">{event.guard_name}</td>
-                  <td className="py-2.5 text-xs text-slate-500">{event.reason ?? "—"}</td>
+                  <td className="py-3 pr-4 text-ink-muted">{event.guard_name}</td>
+                  <td className="py-3 pr-6 text-xs text-ink-muted">{event.reason ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {!activity.data?.length ? <EmptyState title="No gate activity yet" /> : null}
+          {!activity.data?.length ? (
+            <div className="p-6">
+              <EmptyState title="No gate activity yet" />
+            </div>
+          ) : null}
         </div>
       </Card>
 
-      <p className="flex items-center gap-2 text-[11px] text-slate-600">
+      <p className="flex items-center gap-2 text-xs text-ink-subtle">
         <Activity className="h-3.5 w-3.5" />
-        Metrics are computed from PostgreSQL; realtime pushes are advisory only.
+        Metrics are computed from PostgreSQL; realtime stream events are advisory only.
       </p>
     </div>
   );

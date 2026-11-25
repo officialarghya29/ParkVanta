@@ -9,6 +9,7 @@ import {
   ErrorNote,
   Field,
   Input,
+  PageHeader,
   SectionTitle,
   Select,
   Spinner,
@@ -81,31 +82,35 @@ export function AuditPage() {
   }
 
   return (
-    <div data-testid="audit-console" className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] tracking-[0.24em] text-teal-bright uppercase">
-            Compliance control
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">Audit trail</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-400">
-            Every gate decision, session event and administrative change is written in the same
-            transaction as the operation it describes.
-          </p>
-        </div>
-        <Badge tone="teal">
-          <ShieldCheck className="h-3 w-3" /> Society scoped
-        </Badge>
-      </div>
+    <div data-testid="audit-console" className="space-y-6">
+      <PageHeader
+        eyebrow="Compliance & ledger"
+        title="Audit trail"
+        description="Every gate decision, session event, and administrative change is recorded in the same database transaction."
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge tone="teal">
+              <ShieldCheck className="h-3 w-3" /> Society scoped
+            </Badge>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={exportVisiblePage}
+              disabled={!items.length}
+            >
+              <Download className="h-3.5 w-3.5" /> Export page CSV
+            </Button>
+          </div>
+        }
+      />
 
-      <Card className="p-6">
+      <Card className="p-5">
         <SectionTitle
-          title="Filter the ledger"
-          caption="Prefix filters keep large archives responsive; exports cover the visible page."
-          action={<Filter className="h-4 w-4 text-teal/70" />}
+          title="Filter ledger"
+          caption="Prefix filters keep queries fast; CSV export covers the visible page."
         />
         <form
-          className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+          className="mt-4 grid gap-3.5 md:grid-cols-2 xl:grid-cols-4"
           onSubmit={(event) => {
             event.preventDefault();
             applyFilters();
@@ -148,100 +153,97 @@ export function AuditPage() {
               onChange={(event) => setDraft({ ...draft, to: event.target.value })}
             />
           </Field>
-          <div className="flex flex-wrap items-end gap-2 md:col-span-2 xl:col-span-4">
-            <Button type="submit">
-              <Filter className="h-4 w-4" /> Apply filters
+          <div className="flex flex-wrap items-center gap-2 md:col-span-2 xl:col-span-4">
+            <Button type="submit" size="sm">
+              <Filter className="h-3.5 w-3.5" /> Apply filters
             </Button>
-            <Button type="button" variant="ghost" onClick={resetFilters}>
-              <RotateCcw className="h-4 w-4" /> Reset
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="ml-auto"
-              onClick={exportVisiblePage}
-              disabled={!items.length}
-            >
-              <Download className="h-4 w-4" /> Export page CSV
+            <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
+              <RotateCcw className="h-3.5 w-3.5" /> Reset
             </Button>
           </div>
         </form>
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-3.5">
           <div className="flex items-center gap-2">
-            <ScrollText className="h-4 w-4 text-teal/70" />
-            <p className="text-sm text-slate-300">
-              <span className="text-white">{total.toLocaleString()}</span> matching events
+            <ScrollText className="h-4 w-4 text-accent" />
+            <p className="text-sm text-ink-muted">
+              <span className="font-semibold text-ink tabular">{total.toLocaleString()}</span> matching events
             </p>
           </div>
-          <p className="font-mono text-[10px] tracking-[0.14em] text-slate-500 uppercase">
+          <p className="font-mono text-xs text-ink-subtle">
             Page {page} of {pages}
           </p>
         </div>
 
-        <div className="px-6 py-2">
+        <div className="px-6">
           {audit.isLoading ? <Spinner label="Loading audit ledger" /> : null}
-          {audit.error ? <ErrorNote message={(audit.error as Error).message} /> : null}
+          {audit.error ? (
+            <div className="py-4">
+              <ErrorNote message={(audit.error as Error).message} />
+            </div>
+          ) : null}
           {!audit.isLoading && !audit.error && items.length === 0 ? (
-            <EmptyState
-              title="No matching audit events"
-              body="Adjust the action prefix, entity or time window."
-            />
+            <div className="py-6">
+              <EmptyState
+                title="No matching audit events"
+                body="Adjust the action prefix, entity type, or time window."
+              />
+            </div>
           ) : null}
         </div>
 
         {items.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[960px] text-left text-sm">
               <thead>
-                <tr className="border-b border-white/[0.07] font-mono text-[10px] tracking-[0.14em] text-slate-500 uppercase">
-                  <th className="px-6 py-3 font-normal">Time</th>
-                  <th className="py-3 pr-4 font-normal">Actor</th>
-                  <th className="py-3 pr-4 font-normal">Action</th>
-                  <th className="py-3 pr-4 font-normal">Entity</th>
-                  <th className="py-3 pr-4 font-normal">IP</th>
-                  <th className="py-3 pr-6 font-normal">Metadata</th>
+                <tr className="border-b border-border bg-surface-subtle/70 text-[11px] font-semibold tracking-wider text-ink-subtle uppercase">
+                  <th className="px-6 py-3">Time</th>
+                  <th className="py-3 pr-4">Actor</th>
+                  <th className="py-3 pr-4">Action</th>
+                  <th className="py-3 pr-4">Entity</th>
+                  <th className="py-3 pr-4">IP address</th>
+                  <th className="py-3 pr-6">Metadata</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border">
                 {items.map((item) => (
-                  <tr key={item.id} className="border-b border-white/[0.04] align-top">
-                    <td className="px-6 py-3 font-mono text-xs whitespace-nowrap text-slate-500">
+                  <tr key={item.id} className="align-top hover:bg-surface-subtle/40">
+                    <td className="px-6 py-3 font-mono text-xs whitespace-nowrap text-ink-muted">
                       {formatDateTime(item.created_at)}
                     </td>
-                    <td className="py-3 pr-4 text-slate-200">
+                    <td className="py-3 pr-4 font-medium text-ink">
                       {item.actor_name ?? "System"}
                     </td>
                     <td className="py-3 pr-4">
-                      <code className="rounded-md border border-teal/20 bg-teal/[0.06] px-2 py-1 font-mono text-[11px] text-teal-bright">
+                      <code className="rounded border border-accent-border bg-accent-soft px-2 py-0.5 font-mono text-xs font-medium text-accent">
                         {item.action}
                       </code>
                     </td>
                     <td className="py-3 pr-4">
-                      <p className="text-slate-300">{item.entity_type}</p>
+                      <p className="text-ink">{item.entity_type}</p>
                       {item.entity_id ? (
-                        <p className="mt-0.5 max-w-40 truncate font-mono text-[10px] text-slate-600">
+                        <p className="mt-0.5 max-w-40 truncate font-mono text-[11px] text-ink-subtle">
                           {item.entity_id}
                         </p>
                       ) : null}
                     </td>
-                    <td className="py-3 pr-4 font-mono text-[11px] text-slate-500">
+                    <td className="py-3 pr-4 font-mono text-xs text-ink-muted">
                       {item.ip_address ?? "—"}
                     </td>
                     <td className="py-3 pr-6">
                       {Object.keys(item.details ?? {}).length ? (
                         <details>
-                          <summary className="cursor-pointer text-xs text-slate-400 hover:text-teal-bright">
+                          <summary className="cursor-pointer text-xs font-medium text-accent hover:text-accent-hover">
                             Inspect JSON
                           </summary>
-                          <pre className="mt-2 max-w-md overflow-auto rounded-lg border border-white/10 bg-abyss-soft/80 p-3 font-mono text-[10px] leading-relaxed text-slate-400">
+                          <pre className="mt-2 max-w-md overflow-auto rounded-lg border border-border bg-surface-subtle p-3 font-mono text-[11px] leading-relaxed text-ink">
                             {JSON.stringify(item.details, null, 2)}
                           </pre>
                         </details>
                       ) : (
-                        <span className="text-xs text-slate-600">—</span>
+                        <span className="text-xs text-ink-subtle">—</span>
                       )}
                     </td>
                   </tr>
@@ -251,14 +253,14 @@ export function AuditPage() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] px-6 py-4">
-          <p className="text-xs text-slate-500">
-            Newest first. Organization scope is enforced by the API, not the interface.
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-3.5">
+          <p className="text-xs text-ink-subtle">
+            Newest first. Organization isolation is enforced by the API.
           </p>
           <div className="flex gap-2">
             <Button
               variant="secondary"
-              className="px-3 py-1.5 text-xs"
+              size="sm"
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
               disabled={offset === 0 || audit.isFetching}
             >
@@ -266,7 +268,7 @@ export function AuditPage() {
             </Button>
             <Button
               variant="secondary"
-              className="px-3 py-1.5 text-xs"
+              size="sm"
               onClick={() => setOffset(offset + PAGE_SIZE)}
               disabled={offset + PAGE_SIZE >= total || audit.isFetching}
             >

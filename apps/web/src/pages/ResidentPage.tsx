@@ -1,6 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Car, Check, Copy, ExternalLink, Plus, QrCode, X } from "lucide-react";
+import {
+  CalendarClock,
+  Car,
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  Plus,
+  QrCode,
+  Search,
+  X,
+} from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -14,6 +25,7 @@ import {
   ErrorNote,
   Field,
   Input,
+  PageHeader,
   SectionTitle,
   Select,
   Spinner,
@@ -22,6 +34,7 @@ import {
 } from "../components/ui";
 import { useEventStream } from "../hooks/useEventStream";
 import { api } from "../lib/api";
+import { cn } from "../lib/cn";
 import { formatDateTime, toDateTimeLocal, titleCase } from "../lib/format";
 import type { ApproveResponse, Availability, Invitation, Page } from "../lib/types";
 
@@ -61,14 +74,14 @@ function defaults(): FormValues {
   };
 }
 
-function QrImage({ value }: { value: string }) {
+function QrImage({ value, visitorName }: { value: string; visitorName: string }) {
   const [source, setSource] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
     void QRCode.toDataURL(value, {
-      margin: 1,
+      margin: 2,
       width: 360,
-      color: { dark: "#061018", light: "#ffffff" },
+      color: { dark: "#18181b", light: "#ffffff" },
     }).then((url) => {
       if (live) setSource(url);
     });
@@ -77,18 +90,41 @@ function QrImage({ value }: { value: string }) {
     };
   }, [value]);
 
-  return source ? (
-    <img src={source} alt="Visitor QR pass" className="h-56 w-56 rounded-xl bg-white p-2" />
-  ) : (
-    <div className="h-56 w-56 animate-pulse rounded-xl bg-white/10" />
+  function download() {
+    if (!source) return;
+    const link = document.createElement("a");
+    link.href = source;
+    link.download = `parkvanta-pass-${visitorName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "qr"}.png`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="rounded-xl border border-border bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+        {source ? (
+          <img src={source} alt="Visitor QR pass" className="h-44 w-44" />
+        ) : (
+          <div className="h-44 w-44 animate-pulse rounded-lg bg-surface-subtle" />
+        )}
+      </div>
+      <Button variant="secondary" size="sm" onClick={download} disabled={!source} className="w-full">
+        <Download className="h-3.5 w-3.5" /> Download QR PNG
+      </Button>
+    </div>
   );
 }
+
+const STATUS_FILTERS = ["ALL", "PENDING", "APPROVED", "COMPLETED"] as const;
 
 export function ResidentPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [issued, setIssued] = useState<ApproveResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>("ALL");
+  const [search, setSearch] = useState("");
 
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: defaults() });
   const invitations = useQuery({
@@ -161,6 +197,18 @@ export function ResidentPage() {
   const items = invitations.data?.items ?? [];
   const activePasses = items.filter((item) => item.status === "APPROVED").length;
   const pending = items.filter((item) => item.status === "PENDING").length;
+  const filteredItems = items.filter((item) => {
+    if (statusFilter !== "ALL" && item.status !== statusFilter) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      return (
+        item.visitor_name.toLowerCase().includes(q) ||
+        (item.vehicle_registration ?? "").toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
   const passUrl = issued ? `${window.location.origin}/pass/${issued.pass_token}` : "";
 
   async function copyLink() {
@@ -173,114 +221,141 @@ export function ResidentPage() {
   const mutationError = createInvitation.error ?? approve.error ?? reject.error ?? cancel.error;
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] tracking-[0.24em] text-teal-bright uppercase">
-            Resident control
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">
-            Good to see you, {user?.full_name.split(" ")[0]}.
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Issue a visitor pass, approve access, and see exactly where the vehicle will park.
-          </p>
-        </div>
-        <Badge tone={live ? "teal" : "slate"}>
-          <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-teal-bright" : "bg-slate-500"}`} />
-          {live ? "Live updates on" : "Apartment access verified"}
-        </Badge>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Resident portal"
+        title={`Welcome back, ${user?.full_name.split(" ")[0]}`}
+        description="Create visitor invitations, issue single-use QR passes, and track assigned parking bays."
+        actions={
+          <Badge tone={live ? "teal" : "slate"} dot>
+            {live ? "Live updates connected" : "Apartment access verified"}
+          </Badge>
+        }
+      />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Visitor bays free" value={availability.data?.available ?? "—"} suffix="slots" accent="teal" />
-        <Stat label="Active passes" value={activePasses} />
-        <Stat label="Awaiting approval" value={pending} accent={pending ? "amber" : undefined} />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Stat
+          label="Visitor bays free"
+          value={availability.data?.available ?? "—"}
+          suffix="slots"
+          accent="teal"
+          icon={<Car className="h-4 w-4" />}
+        />
+        <Stat label="Active passes" value={activePasses} icon={<QrCode className="h-4 w-4" />} />
+        <Stat
+          label="Awaiting approval"
+          value={pending}
+          accent={pending ? "amber" : undefined}
+          icon={<CalendarClock className="h-4 w-4" />}
+        />
       </div>
 
       {(mutationError as Error | null) ? <ErrorNote message={(mutationError as Error).message} /> : null}
 
       {issued ? (
-        <Card className="overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] px-6 py-4">
+        <Card className="overflow-hidden border-accent/30">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-accent-soft/60 px-6 py-4">
             <div>
-              <p className="font-mono text-[10px] tracking-[0.18em] text-teal-bright uppercase">
-                Pass issued · show to the guard
+              <p className="text-[11px] font-semibold tracking-wider text-accent uppercase">
+                Pass issued · share with visitor
               </p>
-              <p className="mt-1 text-lg font-semibold text-white">{issued.invitation.visitor_name}</p>
+              <p className="mt-0.5 text-lg font-semibold text-ink">{issued.invitation.visitor_name}</p>
             </div>
-            <Button variant="ghost" onClick={() => setIssued(null)} aria-label="Dismiss pass">
-              <X className="h-4 w-4" />
+            <Button variant="ghost" size="sm" onClick={() => setIssued(null)} aria-label="Dismiss pass">
+              <X className="h-4 w-4" /> Dismiss
             </Button>
           </div>
-          <div className="grid gap-6 p-6 md:grid-cols-[auto_1fr]">
+          <div className="grid gap-6 p-6 md:grid-cols-[200px_1fr]">
             <div className="mx-auto md:mx-0">
-              <QrImage value={passUrl} />
+              <QrImage value={passUrl} visitorName={issued.invitation.visitor_name} />
             </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="flex flex-col justify-between space-y-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div>
-                  <p className="font-mono text-[10px] tracking-[0.14em] text-slate-500 uppercase">Slot</p>
-                  <p className="mt-1 text-lg text-white">{issued.parking_slot_code ?? "No vehicle"}</p>
-                </div>
-                <div>
-                  <p className="font-mono text-[10px] tracking-[0.14em] text-slate-500 uppercase">Expires</p>
-                  <p className="mt-1 text-white">{formatDateTime(issued.pass_expires_at)}</p>
-                </div>
-                <div>
-                  <p className="font-mono text-[10px] tracking-[0.14em] text-slate-500 uppercase">Vehicle</p>
-                  <p className="mt-1 text-white">
-                    {issued.invitation.vehicle_registration ?? "Pedestrian visitor"}
+                  <p className="text-[11px] font-medium text-ink-subtle">Assigned bay</p>
+                  <p className="mt-0.5 text-base font-semibold text-ink">
+                    {issued.parking_slot_code ?? "Pedestrian"}
                   </p>
                 </div>
                 <div>
-                  <p className="font-mono text-[10px] tracking-[0.14em] text-slate-500 uppercase">Type</p>
-                  <p className="mt-1 text-white">{titleCase(issued.invitation.visitor_type)}</p>
+                  <p className="text-[11px] font-medium text-ink-subtle">Expires</p>
+                  <p className="mt-0.5 text-sm font-medium text-ink">
+                    {formatDateTime(issued.pass_expires_at)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-ink-subtle">Vehicle</p>
+                  <p className="mt-0.5 text-sm font-medium text-ink">
+                    {issued.invitation.vehicle_registration ?? "No vehicle"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-ink-subtle">Visit type</p>
+                  <p className="mt-0.5 text-sm font-medium text-ink">
+                    {titleCase(issued.invitation.visitor_type)}
+                  </p>
                 </div>
               </div>
-              <div className="rounded-xl border border-white/10 bg-abyss-soft/70 p-3">
-                <p data-testid="pass-url" className="truncate font-mono text-[11px] text-slate-400">
+
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-subtle p-2.5">
+                <p
+                  data-testid="pass-url"
+                  className="min-w-0 flex-1 truncate px-1.5 font-mono text-xs text-ink-muted"
+                >
                   {passUrl}
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={copyLink}>
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  {copied ? "Copied" : "Copy pass link"}
+                <Button variant="secondary" size="sm" onClick={() => void copyLink()}>
+                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? "Copied" : "Copy link"}
                 </Button>
                 <a href={passUrl} target="_blank" rel="noreferrer">
-                  <Button variant="ghost">
-                    <ExternalLink className="h-4 w-4" /> Open visitor view
+                  <Button variant="ghost" size="sm">
+                    <ExternalLink className="h-3.5 w-3.5" /> Open pass
                   </Button>
                 </a>
               </div>
-              <p className="text-xs text-slate-500">
-                The token is shown once. Only its SHA-256 hash is stored, and a single scan consumes it.
+
+              <p className="text-xs text-ink-subtle">
+                The pass token is displayed once. Only its SHA-256 hash is persisted, and a single gate
+                authorization consumes it.
               </p>
             </div>
           </div>
         </Card>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card className="p-6">
+      <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+        <Card className="h-fit p-6">
           <SectionTitle
-            title="Issue a visitor pass"
-            caption="Parking is reserved automatically on approval when a vehicle is attached."
+            title="New visitor invitation"
+            caption="Parking is reserved automatically upon approval when a vehicle is included."
           />
           <form
             className="mt-5 grid gap-4 sm:grid-cols-2"
             onSubmit={form.handleSubmit((values) => createInvitation.mutate(values))}
           >
-            <Field label="Visitor name" error={form.formState.errors.visitor_name?.message}>
-              <Input
-                data-testid="visitor-name"
-                placeholder="Rahul Sharma"
-                {...form.register("visitor_name")}
-              />
-            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Visitor name" error={form.formState.errors.visitor_name?.message} required>
+                <Input
+                  data-testid="visitor-name"
+                  placeholder="Rahul Sharma"
+                  {...form.register("visitor_name")}
+                />
+              </Field>
+            </div>
             <Field label="Mobile" hint="optional">
               <Input placeholder="9876543210" {...form.register("visitor_phone")} />
+            </Field>
+            <Field label="Visitor type">
+              <Select {...form.register("visitor_type")}>
+                <option value="GUEST">Personal guest</option>
+                <option value="DELIVERY">Delivery</option>
+                <option value="CAB">Cab</option>
+                <option value="MAINTENANCE">Maintenance</option>
+                <option value="SERVICE_TECHNICIAN">Service technician</option>
+                <option value="BUSINESS">Business visitor</option>
+                <option value="EMERGENCY">Emergency</option>
+              </Select>
             </Field>
             <Field label="Vehicle number" hint="optional">
               <Input
@@ -297,31 +372,22 @@ export function ResidentPage() {
                 <option value="OVERSIZED">Oversized</option>
               </Select>
             </Field>
-            <Field label="Visitor type">
-              <Select {...form.register("visitor_type")}>
-                <option value="GUEST">Personal guest</option>
-                <option value="DELIVERY">Delivery</option>
-                <option value="CAB">Cab</option>
-                <option value="MAINTENANCE">Maintenance</option>
-                <option value="SERVICE_TECHNICIAN">Service technician</option>
-                <option value="BUSINESS">Business visitor</option>
-                <option value="EMERGENCY">Emergency</option>
-              </Select>
-            </Field>
-            <Field label="Purpose" hint="optional">
-              <Input placeholder="Family visit" {...form.register("purpose")} />
-            </Field>
-            <Field label="Expected arrival">
+            <div className="sm:col-span-2">
+              <Field label="Purpose" hint="optional">
+                <Input placeholder="Family visit" {...form.register("purpose")} />
+              </Field>
+            </div>
+            <Field label="Expected arrival" required>
               <Input type="datetime-local" {...form.register("expected_arrival")} />
             </Field>
-            <Field label="Expected departure">
+            <Field label="Expected departure" required>
               <Input type="datetime-local" {...form.register("expected_departure")} />
             </Field>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 pt-1">
               <Button
                 data-testid="create-invitation"
                 type="submit"
-                className="w-full sm:w-auto"
+                className="w-full"
                 disabled={createInvitation.isPending}
               >
                 <Plus className="h-4 w-4" />
@@ -331,74 +397,117 @@ export function ResidentPage() {
           </form>
         </Card>
 
-        <Card className="p-6">
-          <SectionTitle title="Visitor history" caption="Newest first" />
-          <div className="mt-5 space-y-3">
-            {invitations.isLoading ? <Spinner /> : null}
-            {!invitations.isLoading && items.length === 0 ? (
-              <EmptyState title="No visitors yet" body="Create your first invitation to see it here." />
-            ) : null}
-            {items.map((invitation) => (
-              <div
-                key={invitation.id}
-                className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-white">{invitation.visitor_name}</p>
-                    <p className="font-mono text-[11px] tracking-wide text-slate-500">
-                      {invitation.vehicle_registration ?? "No vehicle"} ·{" "}
-                      {titleCase(invitation.visitor_type)}
-                    </p>
-                  </div>
-                  <Badge tone={statusTone(invitation.status)}>{invitation.status}</Badge>
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-                  <CalendarClock className="h-3.5 w-3.5 text-teal/70" />
-                  {formatDateTime(invitation.expected_arrival)} →{" "}
-                  {formatDateTime(invitation.expected_departure)}
-                </div>
-                {invitation.parking_slot_code ? (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-teal-bright">
-                    <Car className="h-3.5 w-3.5" />
-                    Slot {invitation.parking_slot_code}
-                    {invitation.parking_zone ? ` · ${invitation.parking_zone}` : ""}
-                  </p>
-                ) : null}
-                {invitation.status === "PENDING" ? (
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      data-testid="approve-invitation"
-                      className="px-3 py-1.5 text-xs"
-                      onClick={() => approve.mutate(invitation.id)}
-                      disabled={approve.isPending}
-                    >
-                      <QrCode className="h-3.5 w-3.5" /> Approve & issue
-                    </Button>
-                    <Button
-                      variant="danger"
-                      className="px-3 py-1.5 text-xs"
-                      onClick={() => reject.mutate(invitation.id)}
-                      disabled={reject.isPending}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                ) : null}
-                {invitation.status === "APPROVED" ? (
-                  <div className="mt-3">
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs"
-                      onClick={() => cancel.mutate(invitation.id)}
-                      disabled={cancel.isPending}
-                    >
-                      Cancel & release slot
-                    </Button>
-                  </div>
-                ) : null}
+        <Card className="overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4">
+            <SectionTitle title="Visitor history" caption="Newest invitations first" />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-ink-subtle" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search visitor or plate"
+                  aria-label="Search visitor or plate"
+                  className="h-8 w-44 pl-8 text-xs"
+                />
               </div>
-            ))}
+              <div className="flex rounded-lg border border-border bg-surface-subtle p-0.5">
+                {STATUS_FILTERS.map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setStatusFilter(filter)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+                      statusFilter === filter
+                        ? "bg-white text-ink shadow-xs"
+                        : "text-ink-muted hover:text-ink",
+                    )}
+                  >
+                    {filter === "ALL" ? "All" : titleCase(filter)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-6">
+            {invitations.isLoading ? <Spinner label="Loading invitations" /> : null}
+            {!invitations.isLoading && filteredItems.length === 0 ? (
+              <EmptyState
+                title={items.length === 0 ? "No invitations yet" : "No matching invitations"}
+                body={
+                  items.length === 0
+                    ? "Create your first visitor invitation using the form."
+                    : "Adjust your search or status filter."
+                }
+              />
+            ) : null}
+
+            {filteredItems.length > 0 ? (
+              <div className="divide-y divide-border">
+                {filteredItems.map((invitation) => (
+                  <div
+                    key={invitation.id}
+                    className="flex flex-wrap items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-ink">{invitation.visitor_name}</p>
+                        <Badge tone={statusTone(invitation.status)} dot>
+                          {invitation.status}
+                        </Badge>
+                      </div>
+                      <p className="font-mono text-xs text-ink-muted">
+                        {invitation.vehicle_registration ?? "Pedestrian"} ·{" "}
+                        {titleCase(invitation.visitor_type)}
+                        {invitation.parking_slot_code
+                          ? ` · Slot ${invitation.parking_slot_code}${invitation.parking_zone ? ` (${invitation.parking_zone})` : ""}`
+                          : ""}
+                      </p>
+                      <p className="flex items-center gap-1.5 text-xs text-ink-subtle">
+                        <CalendarClock className="h-3.5 w-3.5 text-ink-subtle" />
+                        {formatDateTime(invitation.expected_arrival)} →{" "}
+                        {formatDateTime(invitation.expected_departure)}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {invitation.status === "PENDING" ? (
+                        <>
+                          <Button
+                            data-testid="approve-invitation"
+                            size="sm"
+                            onClick={() => approve.mutate(invitation.id)}
+                            disabled={approve.isPending}
+                          >
+                            <QrCode className="h-3.5 w-3.5" /> Approve & issue
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => reject.mutate(invitation.id)}
+                            disabled={reject.isPending}
+                          >
+                            Reject
+                          </Button>
+                        </>
+                      ) : null}
+                      {invitation.status === "APPROVED" ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => cancel.mutate(invitation.id)}
+                          disabled={cancel.isPending}
+                        >
+                          Cancel & release slot
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         </Card>
       </div>

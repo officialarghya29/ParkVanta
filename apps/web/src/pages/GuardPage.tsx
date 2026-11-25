@@ -21,10 +21,12 @@ import {
   ErrorNote,
   Field,
   Input,
+  PageHeader,
   SectionTitle,
   Select,
   Spinner,
   Stat,
+  SuccessNote,
   statusTone,
 } from "../components/ui";
 import { useAuth } from "../auth/AuthContext";
@@ -294,10 +296,10 @@ export function GuardPage() {
           invitation_id: visitor.invitation_id,
           recorded_at: new Date().toISOString(),
         });
-      } catch (error) {
+      } catch (err) {
         setSyncMessage(
           `Could not store the exit on this device. ${
-            error instanceof Error ? error.message : "Device storage is unavailable."
+            err instanceof Error ? err.message : "Device storage is unavailable."
           }`,
         );
         return;
@@ -328,10 +330,10 @@ export function GuardPage() {
         invitation_id: verdict?.invitation_id ?? undefined,
         recorded_at: new Date().toISOString(),
       });
-    } catch (error) {
+    } catch (err) {
       setSyncMessage(
         `Could not store the override on this device. ${
-          error instanceof Error ? error.message : "Device storage is unavailable."
+          err instanceof Error ? err.message : "Device storage is unavailable."
         }`,
       );
       return;
@@ -342,42 +344,36 @@ export function GuardPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] tracking-[0.24em] text-teal-bright uppercase">
-            Gate console
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">Verify. Authorize. Release.</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Scanning verifies the pass. Entry is only granted after an explicit authorization.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge tone={live ? "teal" : "slate"}>
-            <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-teal-bright" : "bg-slate-500"}`} />
-            {live ? "Live" : "Polling"}
-          </Badge>
-          <Badge tone={activeVisitors.some((visitor) => visitor.overstay) ? "amber" : "teal"}>
-            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {activeVisitors.length} vehicle{activeVisitors.length === 1 ? "" : "s"} inside
-          </Badge>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Security checkpoint"
+        title="Gate console"
+        description="Verify single-use passes, explicitly authorize barrier opening, and confirm vehicle entry or exit."
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge tone={live ? "teal" : "slate"} dot>
+              {live ? "Live stream" : "Polling"}
+            </Badge>
+            <Badge tone={activeVisitors.some((visitor) => visitor.overstay) ? "amber" : "teal"} dot>
+              {activeVisitors.length} vehicle{activeVisitors.length === 1 ? "" : "s"} inside
+            </Badge>
+          </div>
+        }
+      />
 
       {!online || pendingCount > 0 ? (
         <div
           data-testid="offline-banner"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
         >
           <div className="flex items-start gap-3">
-            <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+            <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
             <div>
-              <p className="text-sm text-amber-100">
+              <p className="text-sm font-medium text-amber-950">
                 {online ? `${pendingCount} gate action(s) awaiting sync` : "Offline mode · cached gate state"}
               </p>
-              <p className="mt-0.5 text-xs text-amber-200/70">
-                Entry authorization stays online. Exit confirmations and audited overrides are queued on
+              <p className="mt-0.5 text-xs text-amber-800">
+                Entry authorization stays online. Exit confirmations and audited overrides queue safely on
                 this device with timestamp and device id.
               </p>
             </div>
@@ -386,22 +382,24 @@ export function GuardPage() {
             <Button
               data-testid="offline-sync"
               variant="secondary"
+              size="sm"
               onClick={() => void flushQueue()}
               disabled={syncing}
             >
-              <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
               {syncing ? "Syncing…" : "Sync now"}
             </Button>
           ) : null}
         </div>
       ) : null}
+
       {syncMessage ? (
-        <p data-testid="offline-sync-result" className="text-xs text-slate-400">
+        <p data-testid="offline-sync-result" className="text-xs font-medium text-ink-muted">
           {syncMessage}
         </p>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Inside now" value={activeVisitors.length} accent="teal" />
         <Stat
           label="Overstays"
@@ -412,37 +410,42 @@ export function GuardPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="p-6">
-          <SectionTitle title="Scan a visitor pass" caption="Camera, paste, or type the token" />
+        <Card className="h-fit p-6">
+          <SectionTitle title="Scan or verify pass" caption="Camera scan, URL paste, or raw token" />
           <div className="mt-5 space-y-4">
-            <div className="flex gap-2">
-              <Field label="Pass token or URL">
-                <Input
-                  data-testid="guard-token"
-                  value={token}
-                  onChange={(event) => setToken(event.target.value)}
-                  placeholder="Paste the visitor link or token"
-                />
-              </Field>
-              <div className="flex items-end gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={scanning ? stopScanner : startScanner}
-                  className="whitespace-nowrap"
-                >
-                  <Camera className="h-4 w-4" />
-                  {scanning ? "Stop" : "Scan"}
-                </Button>
+            <div className="flex items-end gap-2">
+              <div className="min-w-0 flex-1">
+                <Field label="Pass token or URL">
+                  <Input
+                    data-testid="guard-token"
+                    value={token}
+                    onChange={(event) => setToken(event.target.value)}
+                    placeholder="Paste the visitor pass link or token"
+                  />
+                </Field>
               </div>
+              <Button
+                variant="secondary"
+                onClick={scanning ? stopScanner : startScanner}
+                className="shrink-0"
+              >
+                <Camera className="h-4 w-4" />
+                {scanning ? "Stop" : "Scan QR"}
+              </Button>
             </div>
-            <div id={scannerId} className={scanning ? "scan-frame overflow-hidden rounded-xl" : "hidden"} />
+
+            <div
+              id={scannerId}
+              className={scanning ? "scan-frame overflow-hidden rounded-xl" : "hidden"}
+            />
             {scanError ? <ErrorNote message={scanError} /> : null}
 
-            <Field label="Vehicle plate at gate" hint="optional, checked against the invitation">
+            <Field label="Vehicle plate at gate" hint="optional · matched against invitation">
               <Input
                 value={plate}
                 onChange={(event) => setPlate(event.target.value.toUpperCase())}
                 placeholder="KA01AB1234"
+                className="font-mono uppercase"
               />
             </Field>
 
@@ -460,9 +463,9 @@ export function GuardPage() {
             </Button>
 
             {!online ? (
-              <p className="rounded-xl border border-amber-400/25 bg-amber-400/[0.05] px-3 py-2 text-xs text-amber-200">
-                Entry verification requires a connection. Cached reads, exit confirmations and audited
-                overrides remain available offline.
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Entry verification requires network connectivity. Cached reads, exit confirmations, and
+                audited overrides remain available offline.
               </p>
             ) : null}
 
@@ -471,34 +474,34 @@ export function GuardPage() {
             {verdict && verdict.reason_code ? (
               <div
                 data-testid="verdict"
-                className={`rounded-2xl border p-5 ${
+                className={`rounded-xl border p-4 ${
                   verdict.allowed
-                    ? "border-teal/30 bg-teal/[0.07]"
-                    : "border-red-400/30 bg-red-500/[0.06]"
+                    ? "border-emerald-200 bg-emerald-50/70"
+                    : "border-red-200 bg-red-50/70"
                 }`}
               >
                 <div className="flex items-start gap-3">
                   {verdict.allowed ? (
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 text-teal-bright" />
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
                   ) : (
-                    <XCircle className="mt-0.5 h-5 w-5 text-red-300" />
+                    <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
                   )}
-                  <div className="min-w-0">
-                    <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-slate-400">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-[11px] font-semibold tracking-wider text-ink-muted uppercase">
                       {verdict.reason_code}
                     </p>
-                    <p className="mt-1 font-medium text-white">{verdict.message}</p>
-                    <div className="mt-3 grid gap-x-6 gap-y-2 text-xs text-slate-300 sm:grid-cols-2">
-                      <span>Visitor: {verdict.visitor_name ?? "—"}</span>
-                      <span>Vehicle: {verdict.vehicle_registration ?? "—"}</span>
-                      <span>Slot: {verdict.parking_slot_code ?? "—"}</span>
-                      <span>Expires: {formatDateTime(verdict.pass_expires_at)}</span>
+                    <p className="mt-0.5 text-sm font-semibold text-ink">{verdict.message}</p>
+                    <div className="mt-3 grid gap-x-4 gap-y-1.5 text-xs text-ink-muted sm:grid-cols-2">
+                      <span>Visitor: <strong className="font-medium text-ink">{verdict.visitor_name ?? "—"}</strong></span>
+                      <span>Vehicle: <strong className="font-mono font-medium text-ink">{verdict.vehicle_registration ?? "—"}</strong></span>
+                      <span>Slot: <strong className="font-mono font-medium text-ink">{verdict.parking_slot_code ?? "—"}</strong></span>
+                      <span>Expires: <strong className="font-medium text-ink">{formatDateTime(verdict.pass_expires_at)}</strong></span>
                     </div>
                   </div>
                 </div>
 
                 {verdict.allowed && verdict.invitation_id ? (
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-4 space-y-2 border-t border-emerald-200/80 pt-3">
                     {!authorization ? (
                       <Button
                         data-testid="guard-authorize"
@@ -511,10 +514,9 @@ export function GuardPage() {
                       </Button>
                     ) : (
                       <>
-                        <div className="rounded-xl border border-teal/30 bg-teal/10 px-4 py-3 text-sm text-teal-bright">
-                          Entry authorized at {formatTime(authorization.authorized_at)}. Gate control is
-                          separate from authorization.
-                        </div>
+                        <SuccessNote
+                          message={`Entry authorized at ${formatTime(authorization.authorized_at)}. Confirm physical entry below.`}
+                        />
                         {!entryResult ? (
                           <Button
                             data-testid="guard-confirm-entry"
@@ -527,7 +529,7 @@ export function GuardPage() {
                             Confirm vehicle entered
                           </Button>
                         ) : (
-                          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                          <div className="rounded-lg border border-border bg-white px-3.5 py-2.5 text-sm font-medium text-ink">
                             {entryResult.slot_code
                               ? `Slot ${entryResult.slot_code} is now ${entryResult.slot_status}.`
                               : "Pedestrian entry confirmed."}
@@ -544,8 +546,8 @@ export function GuardPage() {
 
         <div className="space-y-6">
           <Card className="p-6">
-            <SectionTitle title="Vehicles inside" caption="Confirm exit to release the slot" />
-            <div className="mt-4 space-y-3">
+            <SectionTitle title="Vehicles inside" caption="Confirm exit to release the bay" />
+            <div className="mt-4 space-y-2.5">
               {active.isLoading && activeVisitors.length === 0 ? <Spinner /> : null}
               {!active.isLoading && activeVisitors.length === 0 ? (
                 <EmptyState title="No vehicles inside" body="Confirmed entries appear here." />
@@ -553,26 +555,24 @@ export function GuardPage() {
               {activeVisitors.map((visitor) => (
                 <div
                   key={visitor.invitation_id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-subtle/50 px-4 py-3"
                 >
-                  <div>
-                    <p className="font-medium text-white">{visitor.visitor_name}</p>
-                    <p className="font-mono text-[11px] text-slate-500">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-ink">{visitor.visitor_name}</p>
+                      {visitor.overstay ? <Badge tone="amber">Overstay</Badge> : null}
+                    </div>
+                    <p className="mt-0.5 font-mono text-xs text-ink-muted">
                       {visitor.vehicle_registration ?? "—"} · Slot {visitor.slot_code ?? "—"}
                     </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
-                      <Clock className="h-3 w-3" /> due {formatTime(visitor.expected_departure)}
-                      {visitor.overstay ? (
-                        <Badge tone="amber" className="ml-2">
-                          overstay
-                        </Badge>
-                      ) : null}
+                    <p className="mt-1 flex items-center gap-1 text-xs text-ink-subtle">
+                      <Clock className="h-3 w-3" /> Due {formatTime(visitor.expected_departure)}
                     </p>
                   </div>
                   <Button
                     data-testid="guard-exit"
                     variant="secondary"
-                    className="px-3 py-1.5 text-xs"
+                    size="sm"
                     onClick={() => void requestExit(visitor)}
                     disabled={confirmExit.isPending}
                   >
@@ -586,15 +586,15 @@ export function GuardPage() {
           <Card className="p-6">
             <SectionTitle
               title="Manual override"
-              caption="For verified exceptions only — recorded permanently"
+              caption="For verified exceptions only — permanently audited"
               action={
                 <Badge tone="amber">
-                  <ShieldAlert className="h-3 w-3" /> audited
+                  <ShieldAlert className="h-3 w-3" /> Audited
                 </Badge>
               }
             />
             <div className="mt-4 space-y-3">
-              <Field label="Reason" hint="minimum 10 characters">
+              <Field label="Reason" hint="minimum 10 characters" required>
                 <Input
                   value={overrideReason}
                   onChange={(event) => setOverrideReason(event.target.value)}
@@ -624,48 +624,57 @@ export function GuardPage() {
                       override.mutate();
                     }}
                   >
-                    <AlertTriangle className="h-4 w-4" /> Record
+                    <AlertTriangle className="h-4 w-4" /> Record override
                   </Button>
                 </div>
               </div>
-              {override.isSuccess ? (
-                <p className="text-xs text-teal-bright">Override recorded in the audit trail.</p>
-              ) : null}
+              {override.isSuccess ? <SuccessNote message="Override recorded in the audit trail." /> : null}
             </div>
           </Card>
         </div>
       </div>
 
-      <Card className="p-6">
-        <SectionTitle title="Recent gate activity" caption="Newest first" />
-        <div className="mt-4 overflow-x-auto">
-          {recent.isLoading ? <Spinner /> : null}
+      <Card className="overflow-hidden">
+        <div className="border-b border-border px-6 py-4">
+          <SectionTitle title="Recent gate activity" caption="Newest decisions first" />
+        </div>
+        <div className="overflow-x-auto">
+          {recent.isLoading ? (
+            <div className="px-6">
+              <Spinner />
+            </div>
+          ) : null}
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead>
-              <tr className="border-b border-white/[0.07] font-mono text-[10px] tracking-[0.14em] text-slate-500 uppercase">
-                <th className="py-2 pr-4 font-normal">Time</th>
-                <th className="py-2 pr-4 font-normal">Visitor</th>
-                <th className="py-2 pr-4 font-normal">Direction</th>
-                <th className="py-2 pr-4 font-normal">Decision</th>
-                <th className="py-2 font-normal">Reason</th>
+              <tr className="border-b border-border bg-surface-subtle/70 text-[11px] font-semibold tracking-wider text-ink-subtle uppercase">
+                <th className="px-6 py-3">Time</th>
+                <th className="py-3 pr-4">Visitor</th>
+                <th className="py-3 pr-4">Direction</th>
+                <th className="py-3 pr-4">Decision</th>
+                <th className="py-3 pr-6">Reason</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border">
               {recent.data?.map((event) => (
-                <tr key={event.id} className="border-b border-white/[0.04] text-slate-300">
-                  <td className="py-2.5 pr-4 font-mono text-xs text-slate-500">
+                <tr key={event.id} className="hover:bg-surface-subtle/40">
+                  <td className="px-6 py-3 font-mono text-xs text-ink-muted">
                     {formatTime(event.created_at)}
                   </td>
-                  <td className="py-2.5 pr-4">{event.visitor_name ?? "—"}</td>
-                  <td className="py-2.5 pr-4">{titleCase(event.direction)}</td>
-                  <td className="py-2.5 pr-4">
+                  <td className="py-3 pr-4 font-medium text-ink">{event.visitor_name ?? "—"}</td>
+                  <td className="py-3 pr-4 text-ink-muted">{titleCase(event.direction)}</td>
+                  <td className="py-3 pr-4">
                     <Badge tone={statusTone(event.decision)}>{titleCase(event.decision)}</Badge>
                   </td>
-                  <td className="py-2.5 text-xs text-slate-500">{event.reason ?? "—"}</td>
+                  <td className="py-3 pr-6 text-xs text-ink-muted">{event.reason ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {!recent.isLoading && !recent.data?.length ? (
+            <div className="p-6">
+              <EmptyState title="No gate activity recorded yet" />
+            </div>
+          ) : null}
         </div>
       </Card>
     </div>
